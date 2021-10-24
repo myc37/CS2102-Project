@@ -64,7 +64,7 @@ CREATE OR REPLACE PROCEDURE add_phone_number
             (IN employee_id INTEGER, IN phone_number INTEGER, IN phone_type TEXT)
         AS $$
         BEGIN     
-            INSERT INTO PhoneNumbers VALUES (employee_id, phone_number, phone_type)
+            INSERT INTO Phone_Numbers VALUES (employee_id, phone_number, phone_type)
         END
         $$ LANGUAGE plpgsql
     
@@ -115,17 +115,24 @@ CREATE OR REPLACE FUNCTION search_room  -- start/end hour means th
 CREATE OR REPLACE PROCEDURE book_room
     (IN floor_no INTEGER, IN room_no INTEGER, IN meeting_date DATE, IN start_hour TIME, IN end_hour TIME, IN employee_id INTEGER)
     AS $$
+    DECLARE 
+        has_fever BOOLEAN;
+        is_resigned DATE;
     BEGIN
-    -- NEED TO CHECK CONDITIONS: IF employee IS BOOKER, IF room is available, IF employee has no fever
-        WHILE start_hour < end_hour LOOP
-            INSERT INTO Meetings (floor_no, room, meeting_date, start_time, meeting_date) VALUES (floor_no, room_no, meeting_date, start_hour, meeting_date);
-            start_hour + interval '1 hour';
-        END LOOP;
+    -- NEED TO CHECK CONDITIONS: IF employee IS BOOKER (done), IF room is available(is this necessary?), IF employee has no fever(done)
+        SELECT fever INTO has_fever FROM Health_Declaration WHERE eid = employee_id AND hd_date = CURRENT_DATE;
+        SELECT resigned_date INTO is_resigned FROM Employees WHERE eid = employee_id;
+        IF employee_id IN (SELECT eid FROM Booker) AND has_fever = FALSE AND is_resigned IS NULL THEN
+            WHILE (start_hour < end_hour) LOOP
+                INSERT INTO Meetings (floor_no, room, meeting_date, start_time, meeting_date) VALUES (floor_no, room_no, meeting_date, start_hour, meeting_date);
+                start_hour := start_hour + interval '1 hour';
+            END LOOP;
+        END IF
     END
     $$ LANGUAGE plpgsql 
 
 CREATE OR REPLACE PROCEDURE unbook_room
-        (IN floor_no INTEGER, IN room_no INTEGER, IN meeting_date DATE, IN start_hour TIMESTAMP, IN end_hour TIMESTAMP, IN employee_id INTEGER)
+        (IN floor_no INTEGER, IN room_no INTEGER, IN meeting_date DATE, IN start_hour TIME, IN end_hour TIME, IN employee_id INTEGER)
     AS $$
     BEGIN
         DELETE FROM Meetings m
@@ -146,21 +153,65 @@ CREATE OR REPLACE PROCEDURE unbook_room
     $$ LANGUAGE plpgsql
 
 CREATE OR REPLACE PROCEDURE join_meeting
-    (IN floor_no INTEGER, IN room_no INTEGER, IN meeting_date DATE, IN start_hour TIMESTAMP, IN end_hour TIMESTAMP, IN employee_id INTEGER)
+    (IN floor_no INTEGER, IN room_no INTEGER, IN meeting_date DATE, IN start_hour TIME, IN end_hour TIME, IN employee_id INTEGER)
     AS $$
+    DECLARE 
+        has_fever BOOLEAN;
+        is_resigned DATE;
+        is_approved INTEGER;
     BEGIN
-            
+        SELECT fever INTO has_fever
+        FROM Health_Declaration
+        WHERE eid = employee_id
+        AND hd_date = CURRENT_DATE;
 
+        SELECT resigned_date INTO is_resigned
+        FROM Employees
+        WHERE eid = employee_id;
+
+        IF has_fever = FALSE AND is_resigned IS NULL THEN
+            WHILE (start_hour < end_hour) LOOP
+                SELECT approver_eid INTO is_approved 
+                FROM Meetings m 
+                WHERE m.floor_no = floor_no
+                AND m.room = room_no
+                AND m.meeting_date = meeting_date
+                AND m.start_time = start_hour;
+                IF is_approved IS NULL THEN
+                    INSERT INTO Joins (room, floor_no, meeting_date, start_time, eid) VALUES (room_no, floor_no, meeting_date, start_hour, employee_id );
+                END IF
+                start_hour := start_hour + interval '1 hour';
+            END LOOP
+        END IF
     END
     $$ LANGUAGE plpgsql
 
 
 CREATE OR REPLACE PROCEDURE leave_meeting
-
+    (IN floor_no INTEGER, IN room_no INTEGER, IN meeting_date DATE, IN start_hour TIME, IN end_hour TIME)
+AS $$
+BEGIN
+END
+$$ LANGUAGE plpgsql
 
 
 CREATE OR REPLACE PROCEDURE approve_meeting
-
+    (IN floor_no INTEGER, IN room_no INTEGER, IN meeting_date DATE, IN start_hour TIME, IN end_hour TIME, IN employee_id INTEGER)
+AS $$
+DECLARE
+    manager_dept INTEGER;
+    room_dept INTEGER;
+BEGIN
+    SELECT did INTO manager_dept FROM Managers WHERE eid = employee_id;
+    SELECT did INTO room_dept FROM Meeting_Rooms mr WHERE mr.floor_no = floor_no AND mr.room = room_no;
+    IF manager_dept IS NOT NULL AND manager_dept = room_dept THEN 
+        WHILE (start_hour < end hour) LOOP
+            UPDATE Meetings m WHERE m.floor_no = floor_no AND m.room = room_no AND m.meeting_date = meeting_date AND m.start_time = start_hour SET approver_eid = employee_eid;
+            start_hour := start_hour + interval '1 hour';
+        END LOOP
+    END IF
+END
+$$ LANGUAGE plpgsql
 -- Health
  
 -- fever boolean implemented in triggers
@@ -174,31 +225,31 @@ $$ LANGUAGE plpgsql
 
 CREATE OR REPLACE FUNCTION contact_tracing 
  (IN employee_id INTEGER)
-RETURNS TABLE(contacts INTEGER) AS $$
+RETURNS SETOF RECORD AS $$
 DECLARE
     Bookings CURSOR FOR 
         SELECT room, floor_no, meeting_date, start_time 
         FROM Meetings
-        WHERE booker_eid = employee.id;
-    Attended_Rooms CURSOR FOR
-        SELECT room, floor_no 
-        FROM Joins
-        WHERE eid = employee_id
-        AND meeting_date ;
+        WHERE booker_eid = employee_id;
 BEGIN
-    DELETE * FROM Joins WHERE eid = employee.id;
+    DELETE * FROM Joins 
+    WHERE eid = employee_id
+    AND meeting_date > CURRENT_DATE;
     FOR b IN (SELECT * FROM Bookings) LOOP
-        DELETE FROM Meetings m WHERE 
-        m.floor_no = b.floor_no
-        AND m.room = b.room
-        AND m.meeting_date = b.meeting_date
-        AND m.start_time = b.start_time
+        CALL unbook_room(b.floor_no, b.room, b.meeting_date,b.start_time, b.start_time + 1, employee.id);
     END LOOP;
-    FOR a in (SELECT * FROM Attended_Rooms) LOOP
-        SELECT eid INTO TABLE FROM Joins j WHERE
-        room j.room = a.room
-        AND j.floor = a.floor;
-    
+    Select eid
+    FROM Employees
+    WHERE eid IN (
+        SELECT eid 
+        FROM Joins
+        WHERE (room, floor_no) IN (
+            SELECT room, floor_no
+            FROM Joins
+            WHERE eid = employee_id
+            AND meeting_date BETWEEN CURRENT_DATE - interval '3' AND CURRENT_DATE
+        ) 
+    )
 END
 $$ LANGUAGE plpgsql
 

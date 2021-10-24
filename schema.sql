@@ -1,19 +1,19 @@
 CREATE OR REPLACE TABLE Employees (
-	eid integer,
-	did integer NOT NULL,
-	email text UNIQUE,
-	ename text,	
-	resigned_date date,
+	eid INTEGER,
+	did INTEGER NOT NULL,
+	email TEXT UNIQUE,
+	ename TEXT,	
+	resigned_date DATE,
 	PRIMARY KEY (eid),
 	FOREIGN KEY (did) REFERENCES Departments (did) -- Works In Relation
 );
 
 -- Assumptions:
 -- 1. Employees can share the same home/office/mobile numbers
-CREATE OR REPLACE TABLE PhoneNumbers (
-	eid integer NOT NULL,
-	phone_number INTEGER,
+CREATE OR REPLACE TABLE Phone_Numbers (
+	eid INTEGER,
 	phone_type TEXT,
+	phone_number INTEGER,
 	PRIMARY KEY(eid, phone_type),
 	CONSTRAINT valid_phone_type CHECK (phone_type IN ('Home', 'Office', 'Mobile')),
 	FOREIGN KEY (eid) REFERENCES Employees (eid)
@@ -50,16 +50,16 @@ CREATE OR REPLACE TABLE Health_Declaration (
 );
 
 CREATE OR REPLACE TABLE Departments (
-	did integer,
-	dname text,
+	did INTEGER,
+	dname TEXT,
 	PRIMARY KEY (did)
 );
 
 CREATE OR REPLACE TABLE Meeting_Rooms (
-	room integer,
-	floor_no integer,
-	rname text,
-	did integer NOT NULL,
+	room INTEGER,
+	floor_no INTEGER,
+	rname TEXT,
+	did INTEGER NOT NULL,
 	PRIMARY KEY (room, floor_no),
 	FOREIGN KEY (did) REFERENCES Departments (did) -- Located In Relation
 );
@@ -76,24 +76,25 @@ CREATE OR REPLACE TABLE Updates (
 );
 -- [ ]unresolved: session must be related to at least one join
 CREATE OR REPLACE TABLE Meetings (
-	room integer,
-	floor_no integer,
-	meeting_date date,
+	room INTEGER,
+	floor_no INTEGER,
+	meeting_date DATE,
 	start_time TIME,
-	booker_eid integer NOT NULL,
-	approver_eid integer,
+	booker_eid INTEGER NOT NULL,
+	approver_eid INTEGER,
 	PRIMARY KEY (room, floor_no, start_time, meeting_date),
 	FOREIGN KEY (booker_eid) REFERENCES Booker (eid), -- Books Relation
-	FOREIGN KEY (approver_eid) REFERENCES Manager (eid) -- Approves Relation
+	FOREIGN KEY (approver_eid) REFERENCES Manager (eid), -- Approves Relation
+	CONSTRAINT valid_date CHECK (meeting_date > CURRENT_DATE OR meeting_date = CURRENT_DATE AND start_time > CURRENT_TIME)
 );
 
 CREATE OR REPLACE TABLE Joins (
-	room integer, 
-	floor_no integer, 
-	meeting_date date, 
+	room INTEGER, 
+	floor_no INTEGER, 
+	meeting_date DATE, 
 	start_time TIME,
-	eid integer,
+	eid INTEGER,
 	PRIMARY KEY (room, floor_no, meeting_date, start_time, eid),
-	FOREIGN KEY (room, floor_no, meeting_date, start_time) REFERENCES Sessions (room, floor_no, meeting_date, start_time),
+	FOREIGN KEY (room, floor_no, meeting_date, start_time) REFERENCES Meetings (room, floor_no, meeting_date, start_time),
 	FOREIGN KEY (eid) REFERENCES Employees (eid)
 );
