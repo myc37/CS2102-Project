@@ -135,11 +135,6 @@ CALL add_phone_number(1, 61234567 , 'Home')
 -- --Fail (Ensure only one phone number of each type)
 -- CALL add_phone_number(1, 61234567 , 'Home')
 
--- BOOK ROOM
--- (Floor, Room, Date, Start Time, End Time, EID)
-CALL book_room(1, 1, CURRENT_DATE + INTERVAL '3 DAYS', TIME '14:00', TIME '16:00', 48); -- Senior Dept 1
-
-
 -- INSERT ROOMS
 -- Success
 -- (Room, Floor, Name, Capacity, Department ID, Manager ID)
@@ -155,6 +150,7 @@ CALL add_room(8, 1, 'Room 8-1', 5, 8, 39);
 CALL add_room(9, 1, 'Room 9-1', 5, 9, 78);
 CALL add_room(10, 1, 'Room 10-1', 5, 10, 79);
 CALL add_room(10, 2, 'Room 10-2', 5, 10, 87);
+CALL add_room(11, 1, 'Room 11-1', 6, 10, 87);
 -- -- Fail (Non Manager)
 -- CALL add_room(6, 2, 'Room 6-2', 5, 6, 100); --junior
 -- CALL add_room(7, 2, 'Room 7-2', 5, 7, 99); --senior
@@ -163,6 +159,14 @@ CALL add_room(10, 2, 'Room 10-2', 5, 10, 87);
 -- CALL add_room(3, 1, 'Room 3-1', 5, 3, 2); --dept 1
 -- CALL add_room(4, 2, 'Room 4-2', 5, 4, 10); --dept 1
 -- CALL add_room(5, 1, 'Room 5-1', 5, 5, 75); --dept 2
+
+-- BOOK ROOM
+-- (Floor, Room, Date, Start Time, End Time, EID)
+CALL book_room(1, 1, CURRENT_DATE, TIME '14:00', TIME '16:00', 48); -- Senior Dept 1
+CALL book_room(1, 2, CURRENT_DATE, TIME '18:00', TIME '20:00', 79);
+
+-- Invalid start/end time
+--CALL book_room(1, 1, CURRENT_DATE, TIME '16:00', TIME '14:00', 48); -- Senior Dept 1
 
 -- Update Capacity
 -- (Floor, Room, Date, Capacity, EID)
@@ -180,6 +184,9 @@ CALL change_capacity(1, 1, CURRENT_DATE, 8, 2);
 -- Search Room
 -- capacity, date, start_time, end_time
 SELECT * FROM search_room(5, CURRENT_DATE, CURRENT_TIME::TIME, CURRENT_TIME::TIME + interval '1 hour');
+
+SELECT *
+FROM search_room(6, CURRENT_DATE, TIME '14:00', TIME '14:00' + interval '2 hours');
 
 
 

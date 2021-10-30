@@ -91,7 +91,7 @@ BEGIN
     SELECT hd.fever 
     FROM Health_Declaration hd
     WHERE hd.eid = NEW.booker_eid
-    AND hd.date = CURRENT_DATE INTO fever;
+    AND hd.hd_date = CURRENT_DATE INTO fever;
 
     SELECT e.resigned_date IS NOT NULL
     FROM Employees e
@@ -287,11 +287,11 @@ FOR EACH ROW EXECUTE FUNCTION same_manager_change_capacity();
 -- Syntax works
 CREATE OR REPLACE FUNCTION booking_only_future() RETURNS TRIGGER AS $$
 BEGIN
-    IF (NEW.start_date > CURRENT_DATE) THEN
+    IF (NEW.meeting_date > CURRENT_DATE) THEN
         RAISE NOTICE 'Error: Bookings can only be made for future dates';
         RETURN NULL;
     ELSE
-        RETURN NULL;
+        RETURN NEW;
     END IF;
 END
 $$ LANGUAGE plpgsql;

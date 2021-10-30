@@ -25,7 +25,7 @@ DELETE FROM Departments;
 END
 $$ LANGUAGE plpgsql;
 
--- Done
+-- Done!
 CREATE OR REPLACE PROCEDURE add_department 
         (IN dept_id INTEGER, IN dept_name TEXT)
     AS $$
@@ -43,7 +43,7 @@ CREATE OR REPLACE PROCEDURE remove_department
     END
     $$ LANGUAGE plpgsql;
 
--- Done
+-- Done!
 -- added dept_id parameter
 CREATE OR REPLACE PROCEDURE add_room
         (IN floor_no INTEGER, room_no INTEGER, room_name TEXT, room_capacity INTEGER, dept_id INTEGER, eid INTEGER)
@@ -54,25 +54,28 @@ CREATE OR REPLACE PROCEDURE add_room
     END
     $$ LANGUAGE plpgsql;
 
--- Done
+-- Done!
 CREATE OR REPLACE PROCEDURE change_capacity 
-        (IN floor_no INTEGER, room_no INTEGER, new_date DATE, capacity INTEGER, eid INTEGER)
+        (IN floor_number INTEGER, room_number INTEGER, new_date DATE, capacity INTEGER, eid INTEGER)
     AS $$ 
     BEGIN
+    IF ((New.floor_no, New.room, NEW.update_date) NOT IN (Select floor_no, room, update_date from Updates)) THEN
         INSERT INTO Updates (floor_no, room, update_date, new_capacity, eid) VALUES (floor_no, room_no, new_date, capacity, eid);
+    ELSE
+        UPDATE Updates SET new_capacity = capacity WHERE floor_no = floor_number AND room_number = room_number AND update_date = new_date;
+    END IF;
     END
     $$ LANGUAGE plpgsql;
 
--- Done
+-- Done!
 -- added this procedure
-
 CREATE OR REPLACE PROCEDURE add_phone_number (IN employee_id INTEGER, IN phone_number INTEGER, IN phone_type TEXT) AS $$
         BEGIN
             INSERT INTO PhoneNumbers (eid, phone_number, phone_type) VALUES (employee_id, phone_number, phone_type);
         END
         $$ LANGUAGE plpgsql;
 
--- Done
+-- Done!
 -- added phone_type parameter
 CREATE OR REPLACE PROCEDURE add_employee
         (IN employee_name TEXT, IN phone_number INTEGER, IN phone_type TEXT, IN kind TEXT, IN department_id INTEGER)
@@ -99,7 +102,7 @@ CREATE OR REPLACE PROCEDURE add_employee
     END
     $$ LANGUAGE plpgsql;
     
--- Done 
+-- Done!
 CREATE OR REPLACE PROCEDURE remove_employee
         (IN employee_id INTEGER, IN date_of_resignation DATE)
     AS $$ 
@@ -112,10 +115,10 @@ CREATE OR REPLACE PROCEDURE remove_employee
         WHERE m.booker_eid = employee_id
         AND m.meeting_date > CURRENT_DATE;
 
-        UPDATE Meetings m
-        SET m.approver_id = NULL
-        WHERE m.approver_eid = employee_id
-        AND m.meeting_date > CURRENT_DATE;
+        UPDATE Meetings 
+        SET approver_eid = NULL
+        WHERE approver_eid = employee_id
+        AND meeting_date > CURRENT_DATE;
 
         -- WE ARE DIRECTLY DELETING INSTEAD OF CALLING LEAVE MEETING BECAUSE ITS EASIER
         DELETE  
@@ -126,37 +129,47 @@ CREATE OR REPLACE PROCEDURE remove_employee
     $$ LANGUAGE plpgsql;
 
 -- Core
--- Done
+-- Done!
 CREATE OR REPLACE FUNCTION search_room  -- start/end hour means th
     (IN capacity INTEGER, IN search_date DATE, IN start_hour TIME, IN end_hour TIME) 
     RETURNS TABLE(rm_floor_no INTEGER, rm_no INTEGER, rm_dept_id INTEGER, rm_capacity INTEGER) AS $$
     BEGIN 
     --ERROR: update date might be in the future, so have to max before or equal to current_date
     RETURN QUERY
-      WITH rooms_with_enough_capacity AS (
-        SELECT floor_no, room, did
-        WHERE (room, floor_no) IN (
-            SELECT room, floor_no 
-            FROM Updates
-            WHERE update_date <= search_date
-            GROUP BY room, floor_no
-            HAVING MAX(new_capacity) >= capacity
+       WITH rooms_with_enough_capacity AS (
+        SELECT u.floor_no, u.room, u.new_capacity
+        FROM Updates u NATURAL JOIN (
+          SELECT room, floor_no, MAX(update_date) as update_date
+          FROM Updates
+          WHERE update_date <= search_date
+          GROUP BY room, floor_no  
+        ) AS latest_updates
+        WHERE u.new_capacity >= capacity),
+        --
+      --find rooms with enough capacity available in the specified period
+      partial_answer AS (
+        SELECT *
+        FROM rooms_with_enough_capacity r
+        WHERE (floor_no, room) NOT IN 
+        (SELECT floor_no, room
+            FROM Meetings m
+            WHERE m.meeting_date = search_date
+            AND m.start_time BETWEEN start_hour AND end_hour - interval '1 hour'
         )
       )
-      --find rooms with enough capacity available in the specified period
-      SELECT *
-      FROM rooms_with_enough_capacity
-      -- FROM rooms_with_enough_capacity r, Meeting_Rooms mr
-      WHERE NOT EXISTS (
-        SELECT 1
-        FROM Meetings m
-        WHERE m.meeting_date = search_date   --e.g. 1230->1330 -- 1300
-        AND m.start_time >= start_hour  -- >= start_hour - 59 minutes? NEED CHANGE PROBABLY
-        AND m.start_time < end_hour
-      );
+      SELECT p.floor_no, p.room, mr.did, p.new_capacity
+      FROM partial_answer p INNER JOIN Meeting_Rooms mr ON 
+      p.floor_no = mr.floor_no AND p.room = mr.room;
+      
     END
     $$ LANGUAGE plpgsql;
 
+/*
+    SELECT * FROM Updates u 
+    WHERE update_date >= ALL(SELECT u2.update_date 
+    FROM Updates u2 WHERE u.room = u2.room AND 
+    u.floor_no = u2.floor_no)
+*/
 -- Done
 CREATE OR REPLACE PROCEDURE book_room
     (IN floor_no INTEGER, IN room_no INTEGER, IN meeting_date DATE, IN start_hour TIME, IN end_hour TIME, IN employee_id INTEGER)
@@ -169,7 +182,7 @@ BEGIN
 -- 4. Employee is not resigned (Enforced by trigger)
 
     WHILE (start_hour < end_hour) LOOP
-        INSERT INTO Meetings (floor_no, room, meeting_date, start_time, meeting_date, booker_eid, approver_eid) VALUES (floor_no, room_no, meeting_date, start_hour, meeting_date, employee_id, NULL);
+        INSERT INTO Meetings (floor_no, room, meeting_date, start_time, booker_eid, approver_eid) VALUES (floor_no, room_no, meeting_date, start_hour, employee_id, NULL);
         start_hour := start_hour + interval '1 hour';
     END LOOP;
 
