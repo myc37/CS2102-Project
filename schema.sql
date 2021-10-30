@@ -1,5 +1,13 @@
-CREATE OR REPLACE TABLE Employees (
-	eid integer,
+-- Done
+CREATE TABLE Departments ( 
+	did INTEGER, 
+	dname text, 
+	PRIMARY KEY (did)
+);
+
+-- Done
+CREATE TABLE Employees (
+	eid SERIAL,
 	did integer NOT NULL,
 	email text UNIQUE,
 	ename text,	
@@ -8,9 +16,10 @@ CREATE OR REPLACE TABLE Employees (
 	FOREIGN KEY (did) REFERENCES Departments (did) -- Works In Relation
 );
 
+-- Done
 -- Assumptions:
 -- 1. Employees can share the same home/office/mobile numbers
-CREATE OR REPLACE TABLE PhoneNumbers (
+CREATE TABLE PhoneNumbers (
 	eid integer NOT NULL,
 	phone_number INTEGER,
 	phone_type TEXT,
@@ -19,43 +28,44 @@ CREATE OR REPLACE TABLE PhoneNumbers (
 	FOREIGN KEY (eid) REFERENCES Employees (eid)
 );
 
-CREATE OR REPLACE TABLE Junior (
-	eid INTEGER PRIMARY KEY
-	FOREIGN KEY (eid) REFERENCES Employees (eid) ON DELETE CASCADE
-;
-
-CREATE OR REPLACE TABLE Booker ( 
-	eid INTEGER PRIMARY KEY
-	FOREIGN KEY (eid) REFERENCES Employees (eid) ON DELETE CASCADE
-)
-	
-CREATE OR REPLACE TABLE Senior (
-	eid INTEGER PRIMARY KEY  
+-- Done
+CREATE TABLE Junior (
+	eid INTEGER PRIMARY KEY,
 	FOREIGN KEY (eid) REFERENCES Employees (eid) ON DELETE CASCADE
 );
 
-CREATE OR REPLACE TABLE Manager ( 
-	eid INTEGER PRIMARY KEY
+-- Done
+CREATE TABLE Booker ( 
+	eid INTEGER PRIMARY KEY,
 	FOREIGN KEY (eid) REFERENCES Employees (eid) ON DELETE CASCADE
 );
 
+-- Done	
+CREATE TABLE Senior (
+	eid INTEGER PRIMARY KEY, 
+	FOREIGN KEY (eid) REFERENCES Employees (eid) ON DELETE CASCADE
+);
+
+-- Done
+CREATE TABLE Manager ( 
+	eid INTEGER PRIMARY KEY,
+	FOREIGN KEY (eid) REFERENCES Employees (eid) ON DELETE CASCADE
+);
+
+-- Done
 -- Assumption: only one health declaration taken a day for each employee
-CREATE OR REPLACE TABLE Health_Declaration (
+CREATE TABLE Health_Declaration (
 	eid integer NOT NULL,
 	hd_date DATE,
 	temp NUMERIC,
 	fever boolean,
 	PRIMARY KEY (eid, hd_date),
-	FOREIGN KEY (eid) REFERENCES Employees (eid)
+	FOREIGN KEY (eid) REFERENCES Employees (eid),
+	CONSTRAINT valid_temperature CHECK (temp BETWEEN 34 AND 43)
 );
 
-CREATE OR REPLACE TABLE Departments (
-	did integer,
-	dname text,
-	PRIMARY KEY (did)
-);
-
-CREATE OR REPLACE TABLE Meeting_Rooms (
+-- Done
+CREATE TABLE Meeting_Rooms (
 	room integer,
 	floor_no integer,
 	rname text,
@@ -64,18 +74,18 @@ CREATE OR REPLACE TABLE Meeting_Rooms (
 	FOREIGN KEY (did) REFERENCES Departments (did) -- Located In Relation
 );
 -- [ ]unresolved: meeting room must be related to at least one update (the initial one presumably) 
-CREATE OR REPLACE TABLE Updates (
+CREATE TABLE Updates (
 	room integer,
 	floor_no integer,
 	update_date date,
-	new_capacity integer,
+	new_capacity integer NOT NULL,
 	eid integer,
 	PRIMARY KEY (eid, room, floor_no, update_date),
 	FOREIGN KEY (room, floor_no) REFERENCES Meeting_Rooms (room, floor_no),
-	FOREIGN KEY (eid) REFERENCES Employees (eid)
+	FOREIGN KEY (eid) REFERENCES Manager (eid)
 );
 -- [ ]unresolved: session must be related to at least one join
-CREATE OR REPLACE TABLE Meetings (
+CREATE TABLE Meetings (
 	room integer,
 	floor_no integer,
 	meeting_date date,
@@ -87,13 +97,13 @@ CREATE OR REPLACE TABLE Meetings (
 	FOREIGN KEY (approver_eid) REFERENCES Manager (eid) -- Approves Relation
 );
 
-CREATE OR REPLACE TABLE Joins (
+CREATE TABLE Joins (
 	room integer, 
 	floor_no integer, 
 	meeting_date date, 
 	start_time TIME,
 	eid integer,
 	PRIMARY KEY (room, floor_no, meeting_date, start_time, eid),
-	FOREIGN KEY (room, floor_no, meeting_date, start_time) REFERENCES Sessions (room, floor_no, meeting_date, start_time),
+	FOREIGN KEY (room, floor_no, meeting_date, start_time) REFERENCES Meetings (room, floor_no, meeting_date, start_time),
 	FOREIGN KEY (eid) REFERENCES Employees (eid)
 );
