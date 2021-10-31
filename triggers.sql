@@ -355,3 +355,4 @@ CREATE TRIGGER update_fever
 BEFORE
 INSERT ON Health_Declaration
 FOR EACH ROW EXECUTE FUNCTION check_temperature();
+

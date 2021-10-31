@@ -59,10 +59,10 @@ CREATE OR REPLACE PROCEDURE change_capacity
         (IN floor_number INTEGER, room_number INTEGER, new_date DATE, capacity INTEGER, eid INTEGER)
     AS $$ 
     BEGIN
-    IF ((New.floor_no, New.room, NEW.update_date) NOT IN (Select floor_no, room, update_date from Updates)) THEN
-        INSERT INTO Updates (floor_no, room, update_date, new_capacity, eid) VALUES (floor_no, room_no, new_date, capacity, eid);
+    IF ((floor_number, room_number, new_date) NOT IN (Select floor_no, room, update_date from Updates)) THEN
+        INSERT INTO Updates (floor_no, room, update_date, new_capacity, eid) VALUES (floor_number, room_number, new_date, capacity, eid);
     ELSE
-        UPDATE Updates SET new_capacity = capacity WHERE floor_no = floor_number AND room_number = room_number AND update_date = new_date;
+        UPDATE Updates SET new_capacity = capacity WHERE floor_no = floor_number AND room = room_number AND update_date = new_date;
     END IF;
     END
     $$ LANGUAGE plpgsql;
@@ -135,6 +135,10 @@ CREATE OR REPLACE FUNCTION search_room  -- start/end hour means th
     RETURNS TABLE(rm_floor_no INTEGER, rm_no INTEGER, rm_dept_id INTEGER, rm_capacity INTEGER) AS $$
     BEGIN 
     --ERROR: update date might be in the future, so have to max before or equal to current_date
+    IF (start_hour > end_hour) THEN 
+        RAISE NOTICE 'Error: start hour time be later than end time';
+        RETURN NULL;
+    END IF;
     RETURN QUERY
        WITH rooms_with_enough_capacity AS (
         SELECT u.floor_no, u.room, u.new_capacity
@@ -154,7 +158,10 @@ CREATE OR REPLACE FUNCTION search_room  -- start/end hour means th
         (SELECT floor_no, room
             FROM Meetings m
             WHERE m.meeting_date = search_date
-            AND m.start_time BETWEEN start_hour AND end_hour - interval '1 hour'
+            AND m.start_time BETWEEN start_hour - interval '1 hour' AND end_hour + interval '1 hour'
+            
+            -- 7:01 - 8:01
+            -- 8:00 - 9:00
         )
       )
       SELECT p.floor_no, p.room, mr.did, p.new_capacity
@@ -180,7 +187,6 @@ BEGIN
 -- 2. Room is available (Enforced by PK being room, floor_no, date, start_time))
 -- 3. Employee is not having a fever (Enforced by trigger)
 -- 4. Employee is not resigned (Enforced by trigger)
-
     WHILE (start_hour < end_hour) LOOP
         INSERT INTO Meetings (floor_no, room, meeting_date, start_time, booker_eid, approver_eid) VALUES (floor_no, room_no, meeting_date, start_hour, employee_id, NULL);
         start_hour := start_hour + interval '1 hour';

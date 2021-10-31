@@ -130,8 +130,8 @@ CALL remove_employee(100, CURRENT_DATE);
 -- ADD PHONE NUMBER
 -- (Employee_ID, Number, Type)
 --Success
-CALL add_phone_number(1, 91234567 , 'Mobile')
-CALL add_phone_number(1, 61234567 , 'Home')
+CALL add_phone_number(1, 91234567 , 'Mobile');
+CALL add_phone_number(1, 61234567 , 'Home');
 -- --Fail (Ensure only one phone number of each type)
 -- CALL add_phone_number(1, 61234567 , 'Home')
 
