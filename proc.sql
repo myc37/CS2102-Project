@@ -136,8 +136,8 @@ CREATE OR REPLACE FUNCTION search_room  -- start/end hour means th
     BEGIN 
     --ERROR: update date might be in the future, so have to max before or equal to current_date
     IF (start_hour > end_hour) THEN 
-        RAISE NOTICE 'Error: start hour time be later than end time';
-        RETURN NULL;
+        RAISE NOTICE 'Error: start time cannot be later than end time';
+        RETURN;
     END IF;
     RETURN QUERY
        WITH rooms_with_enough_capacity AS (
@@ -158,10 +158,8 @@ CREATE OR REPLACE FUNCTION search_room  -- start/end hour means th
         (SELECT floor_no, room
             FROM Meetings m
             WHERE m.meeting_date = search_date
-            AND m.start_time BETWEEN start_hour - interval '1 hour' AND end_hour + interval '1 hour'
-            
-            -- 7:01 - 8:01
-            -- 8:00 - 9:00
+            AND m.start_time > start_hour - interval '1 hour'
+            AND m.start_time < end_hour        
         )
       )
       SELECT p.floor_no, p.room, mr.did, p.new_capacity
@@ -177,11 +175,15 @@ CREATE OR REPLACE FUNCTION search_room  -- start/end hour means th
     FROM Updates u2 WHERE u.room = u2.room AND 
     u.floor_no = u2.floor_no)
 */
--- Done
+-- Done!
 CREATE OR REPLACE PROCEDURE book_room
     (IN floor_no INTEGER, IN room_no INTEGER, IN meeting_date DATE, IN start_hour TIME, IN end_hour TIME, IN employee_id INTEGER)
 AS $$
 BEGIN
+    IF (start_hour > end_hour) THEN
+        RAISE NOTICE 'Error: start time cannot be later than end time';
+        RETURN;
+    END IF;
 -- Conditions for successful booking:
 -- 1. Employee is Booker (Enforced by FK reference to Booker table)
 -- 2. Room is available (Enforced by PK being room, floor_no, date, start_time))
@@ -199,15 +201,15 @@ $$ LANGUAGE plpgsql;
 
 -- Done
 CREATE OR REPLACE PROCEDURE unbook_room
-        (IN floor_no INTEGER, IN room_no INTEGER, IN meeting_date DATE, IN start_hour TIME, IN end_hour TIME, IN employee_id INTEGER)
+        (IN floor_number INTEGER, IN room_number INTEGER, IN meeting_date DATE, IN start_hour TIME, IN end_hour TIME, IN employee_id INTEGER)
     AS $$
     DECLARE 
         booker_eid INTEGER;
     BEGIN
         SELECT m.booker_eid INTO booker_eid
         FROM Meetings m
-        WHERE m.room = room.no
-        AND m.floor_no = floor_no
+        WHERE m.room = room_number
+        AND m.floor_no = floor_number
         AND m.meeting_date = meeting_date
         AND m.start_time = start_hour;
 
@@ -217,16 +219,16 @@ CREATE OR REPLACE PROCEDURE unbook_room
         END IF;
 
         DELETE FROM Meetings m
-        WHERE m.floor_no = floor_no 
-        AND m.room = room_no 
+        WHERE m.floor_no = floor_number 
+        AND m.room = room_number 
         AND m.meeting_date = meeting_date
         AND m.start_time >= start_hour 
         AND m.start_time < end_hour 
         AND m.booker_eid = eid;
 
         DELETE FROM Joins j
-        WHERE j.room = room_no
-        AND j.floor_no = floor_no
+        WHERE j.room = room_number
+        AND j.floor_no = floor_number
         AND j.meeting_date = meeting_date
         AND j.start_time >= start_hour
         AND j.start_time < end_hour;
@@ -249,9 +251,9 @@ CREATE OR REPLACE PROCEDURE join_meeting
 
 -- Done
 CREATE OR REPLACE PROCEDURE leave_meeting (
-    IN floor_no INTEGER,
-    IN room_no INTEGER,
-    IN meeting_date DATE,
+    IN floor_number INTEGER,
+    IN room_number INTEGER,
+    IN meet_date DATE,
     IN start_hour TIME,
     IN end_hour TIME,
     IN employee_id INTEGER
@@ -259,18 +261,19 @@ CREATE OR REPLACE PROCEDURE leave_meeting (
 AS $$
 BEGIN
     DELETE FROM Joins j 
-    WHERE j.floor_no = floor_no 
-    AND j.room_no = room_no
-    AND j.meeting_date = meeting_date
-    AND start_time BETWEEN start_hour AND end_hour;
+    WHERE j.floor_no = floor_number 
+    AND j.room = room_number
+    AND j.meeting_date = meet_date
+    AND j.start_time >= start_hour
+    AND j.start_time < end_hour;
 END
 $$ LANGUAGE plpgsql;
 
 -- Done
 CREATE OR REPLACE PROCEDURE approve_meeting (
-    IN floor_no INTEGER, 
-    IN room_no INTEGER, 
-    IN meeting_date DATE, 
+    IN floor_number INTEGER, 
+    IN room_number INTEGER, 
+    IN meet_date DATE, 
     IN start_hour TIME, 
     IN end_hour TIME,
     IN employee_id INTEGER,
@@ -278,10 +281,12 @@ CREATE OR REPLACE PROCEDURE approve_meeting (
 ) AS $$
 BEGIN
     IF decision IS TRUE THEN
-        UPDATE Meetings m SET approver_eid = employee_id WHERE m.floor_no = floor_no
-        AND m.room_no = room_no
-        AND m.meeting_date = meeting_date
-        AND m.start_time BETWEEN start_hour AND end_hour - interval '1 hour';
+        UPDATE Meetings m SET approver_eid = employee_id
+        WHERE m.floor_no = floor_number
+        AND m.room = room_number
+        AND m.meeting_date = meet_date
+        AND m.start_time >= start_hour 
+        AND m.start_time < end_hour;
     ELSIF decision IS FALSE THEN
         CALL reject_meeting(floor_no, room_no, meeting_date, start_hour, end_hour);
     END IF;
@@ -290,13 +295,15 @@ $$ LANGUAGE plpgsql;
 
 -- Done
 CREATE OR REPLACE PROCEDURE reject_meeting (
-    IN floor_no INTEGER, IN room_no INTEGER, IN meeting_date DATE, IN start_hour TIME, IN end_hour TIME
+    IN floor_number INTEGER, IN room_number INTEGER, IN meet_date DATE, IN start_hour TIME, IN end_hour TIME
 ) AS $$
 BEGIN
-    DELETE FROM Meetings m WHERE m.floor_no = floor_no
-    AND m.room_no = room_no
-    AND m.meeting_date = meeting_date
-    AND start_time BETWEEN start_hour AND end_hour;
+    DELETE FROM Meetings m
+    WHERE m.floor_no = floor_number
+    AND m.room = room_number
+    AND m.meeting_date = meet_date
+    AND m.start_time >= start_hour
+    AND m.start_time < end_hour;
 END
 $$ LANGUAGE plpgsql;
 -- Health
@@ -344,20 +351,59 @@ BEGIN
     
 END
 $$ LANGUAGE plpgsql;
+*/
 
+CREATE OR REPLACE FUNCTION contact_tracing
+    (IN employee_id INTEGER)
+RETURNS TABLE (employee_id INTEGER) AS $$
+BEGIN
+    IF ()
+END
+$$ LANGUAGE plpgsql
 -- Admin
 
 CREATE OR REPLACE FUNCTION non_compliance
-    (IN starting_date DATE, OUT end_date DATE) 
+    (IN starting_date DATE, IN end_date DATE) 
 RETURNS TABLE (
     employee_id INTEGER,
     number_of_days INTEGER
 ) AS $$
-BEGIN 
-    -- how tf do u do dis
+DECLARE 
+    num_days INT := (starting_date  - end_date) + 1;
+BEGIN
+    WITH declaration_count AS (
+        SELECT hd.eid, COUNT(*) as declare_count
+        FROM Health_Declaration hd
+        WHERE hd_date >= starting_date
+        AND hd_date < end_date 
+        GROUP BY hd.eid
+    )
+
+    SELECT dc.eid, num_days - dc.declare_count
+    FROM declaration_count dc
+
+    /*
+    CREATE OR REPLACE TEMP TABLE Temp_Table (
+        employee_id INTEGER
+    )
+    WHILE (starting_date <= ending_date) LOOP
+        Temp_Table
+        UNION
+        -- QUESTION: why use distinct when eid is PK
+        (SELECT DISTINCT eid FROM Employees
+        EXCEPT
+        SELECT eid FROM Health_Declaration WHERE hd_date = starting_date)
+        starting_date := starting_date + interval '1 day';
+    END LOOP
+    RETURN QUERY 
+        SELECT employee_id, COUNT(employee_id) as number_of_days
+        FROM Temp_Table 
+        GROUP BY employee_id
+        ORDER by COUNT(employee_id) DESC 
+    */
 END
 $$ LANGUAGE plpgsql;
-*/
+
 -- Done
 CREATE OR REPLACE FUNCTION view_booking_report
     (IN start_on DATE, eid INTEGER)

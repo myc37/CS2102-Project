@@ -119,20 +119,20 @@ FOR EACH ROW EXECUTE FUNCTION booker_nofever_noresign();
 
 --- Constraint 34:
 -- SYNTAX WORKS
-CREATE OR REPLACE OR REPLACE FUNCTION approver_noresign() RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION approver_noresign() RETURNS TRIGGER AS $$
 DECLARE
     resigned BOOLEAN;
 BEGIN
-    SELECT e.resigned_date IS NOT NULL 
+    SELECT e.resigned_date IS NOT NULL INTO resigned
     FROM Employees e
-    WHERE e.eid = NEW.approver_eid INTO resigned;
+    WHERE e.eid = NEW.approver_eid;
 
     IF resigned IS TRUE THEN
         RAISE NOTICE 'Error: Employees that have resigned are not permitted to approve a meeting.';
         RETURN NULL;
-	END IF;
-
-    RETURN NEW;
+    ELSE 
+        RETURN NEW;
+    END IF;
 END
 $$ LANGUAGE plpgsql;
 
@@ -155,6 +155,7 @@ BEGIN
     AND hd_date = CURRENT_DATE;
 
     IF (hasFever) THEN
+        RAISE NOTICE 'Error: employee has a fever';
         RETURN NULL;
     ELSE
         RETURN NEW;
@@ -175,20 +176,17 @@ DECLARE
     manager_did INTEGER;
     meeting_did INTEGER;
 BEGIN
-    IF (NEW.eid IS NOT NULL) THEN  
-        RETURN NULL;
-    END IF;
+    SELECT e.did into manager_did
+    FROM Employees e
+    WHERE e.eid = NEW.approver_eid;
 
-    SELECT did into manager_did
-    FROM Employees
-    WHERE eid = NEW.eid;
-
-    SELECT did INTO meeting_did
-    FROM Meeting_Rooms
-    WHERE room = OLD.room
-    AND floor_no = OLD.floor_no;
+    SELECT m.did INTO meeting_did
+    FROM Meeting_Rooms m
+    WHERE m.room = OLD.room
+    AND m.floor_no = OLD.floor_no;
 
     IF (manager_did <> meeting_did) THEN
+        RAISE NOTICE 'Error: Approver belongs to a different department than the meeting room.';
         RETURN NULL;
     ELSE
         RETURN NEW;
@@ -206,6 +204,7 @@ FOR EACH ROW EXECUTE FUNCTION reject_approval_diff_dept();
 -- Syntax Works
 CREATE OR REPLACE FUNCTION stop_second_approval() RETURNS TRIGGER AS $$
 BEGIN
+    RAISE NOTICE 'Error: Cannot approve a meeting that is already approved.';
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
@@ -241,10 +240,16 @@ CREATE OR REPLACE FUNCTION check_leave_meeting() RETURNS TRIGGER AS $$
 DECLARE
 	resigned DATE;
 	has_fever BOOLEAN;
+    approver_id INTEGER;
 BEGIN
-	SELECT resigned_date INTO resigned FROM Employees WHERE eid = OLD.eid;
-	SELECT fever INTO has_fever FROM Health_Declaration WHERE hd_date = OLD.meeting_date;
-	IF (has_fever IS FALSE OR resigned IS NOT NULL OR OLD.approver_eid IS NOT NULL) THEN
+	SELECT e.resigned_date INTO resigned FROM Employees e WHERE e.eid = OLD.eid;
+	SELECT hd.fever INTO has_fever FROM Health_Declaration hd WHERE hd.hd_date = OLD.meeting_date AND eid = OLD.eid;
+    SELECT m.approver_eid INTO approver_id FROM Meetings m WHERE m.room = OLD.room 
+    AND m.floor_no = OLD.floor_no 
+    AND m.meeting_date = OLD.meeting_date 
+    AND m.start_time = OLD.start_time;
+	
+    IF (has_fever IS FALSE AND resigned IS NOT NULL AND approver_id IS NOT NULL) THEN
 		RAISE NOTICE 'Error: No valid reason to leave meeting';
 		RETURN NULL;
 	ELSE
@@ -342,7 +347,7 @@ FOR EACH ROW EXECUTE FUNCTION check_approve_meeting_date();
 --Syntax works
 CREATE OR REPLACE FUNCTION check_temperature() RETURNS TRIGGER AS $$
 BEGIN
-    IF (NEW.temperature > 37.5) THEN
+    IF (NEW.temp > 37.5) THEN
         NEW.fever := TRUE;
     ELSE
         NEW.fever := FALSE;

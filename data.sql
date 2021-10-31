@@ -19,12 +19,12 @@ CALL add_department(11, 'Biology');
 -- CALL add_department(1, 'Marketing'); 
 
 -- REMOVE DEPARTMENTS
-CALL remove_department(11);
+-- CALL remove_department(11);
 
 -- INSERT 100 EMPLOYEES
 -- (Employee name, Phone number, Phoen type, Kind, Department ID)
 CALL add_employee('Adel Stannislawski', 44898478, 'Office', 'junior', 2);
-CALL add_employee('Kleon Delve', 46379749, 'Mobile', 'manager', 1);
+CALL add_employee('Kleon Delve', 46379749, 'Mobile', 'manager', 1); -- 2
 CALL add_employee('Teador Fawthorpe', 21028980, 'Office', 'senior', 4);
 CALL add_employee('Merna Bloomer', 78268285, 'Home', 'junior', 3);
 CALL add_employee('Codie Duncklee', 89071609, 'Home', 'junior', 8);
@@ -55,7 +55,7 @@ CALL add_employee('Myrah Blackaby', 47890737, 'Mobile', 'junior', 3);
 CALL add_employee('Rosabelle Notti', 91024806, 'Home', 'senior', 6);
 CALL add_employee('Beatrice Griffey', 65040656, 'Home', 'junior', 8);
 CALL add_employee('Janeczka Stotherfield', 92235630, 'Home', 'junior', 1);
-CALL add_employee('Lea Church', 54850716, 'Home', 'senior', 4);
+CALL add_employee('Lea Church', 54850716, 'Home', 'senior', 4); -- 33
 CALL add_employee('Lorrayne Looks', 98837351, 'Mobile', 'junior', 2);
 CALL add_employee('Calypso Radish', 89986912, 'Home', 'junior', 5);
 CALL add_employee('Gretna Kyndred', 73249693, 'Home', 'senior', 3);
@@ -125,7 +125,7 @@ CALL add_employee('Ivonne Batchelder', 92713176, 'Mobile', 'senior', 7);
 CALL add_employee('Ranee Ziebart', 32335633, 'Home', 'junior', 6);
 
 -- REMOVE EMPLOYEE
-CALL remove_employee(100, CURRENT_DATE);
+-- CALL remove_employee(100, CURRENT_DATE);
 
 -- ADD PHONE NUMBER
 -- (Employee_ID, Number, Type)
@@ -188,8 +188,22 @@ SELECT * FROM search_room(5, CURRENT_DATE, CURRENT_TIME::TIME, CURRENT_TIME::TIM
 SELECT *
 FROM search_room(6, CURRENT_DATE, TIME '14:00', TIME '14:00' + interval '2 hours');
 
+-- unbook room
+CALL unbook_room(1, 1, CURRENT_DATE, TIME '14:00', TIME '16:00', 48); -- Senior Dept 1
+CALL unbook_room(1, 2, CURRENT_DATE, TIME '18:00', TIME '20:00', 79);
 
+-- leave meeting
 
+CALL leave_meeting(1, 1, CURRENT_DATE, TIME '14:00', TIME '15:00', 55);
 
+-- approve meeting
+-- floor no, room no, meeting date, start time, end time, approver_eid, decision
+CALL approve_meeting(1, 1, CURRENT_DATE, TIME '18:00', TIME '20:00', 2, TRUE);
 
+-- declare health
+CALL declare_health(1, CURRENT_DATE, 37.1);
+CALL declare_health(2, CURRENT_DATE, 39.9);
 
+-- non-compliance
+
+CALL non_compliance(CURRENT_DATE - )
