@@ -113,18 +113,21 @@ CREATE OR REPLACE PROCEDURE remove_employee
         DELETE 
         FROM Meetings m
         WHERE m.booker_eid = employee_id
-        AND m.meeting_date > CURRENT_DATE;
+        AND ((m.meeting_date = CURRENT_DATE AND m.start_time > CURRENT_TIME) OR (m.meeting_date > CURRENT_DATE));
 
-        UPDATE Meetings 
-        SET approver_eid = NULL
-        WHERE approver_eid = employee_id
-        AND meeting_date > CURRENT_DATE;
+
+        UPDATE Meetings m2
+        SET m2.approver_eid = NULL
+        WHERE m2.approver_eid = employee_id
+        AND ((m2.meeting_date = CURRENT_DATE AND m2.start_time > CURRENT_TIME) OR (m2.meeting_date > CURRENT_DATE));
+
 
         -- WE ARE DIRECTLY DELETING INSTEAD OF CALLING LEAVE MEETING BECAUSE ITS EASIER
         DELETE  
         FROM Joins j
         WHERE j.eid = employee_id
-        AND j.meeting_date > CURRENT_DATE;
+        AND ((j.meeting_date = CURRENT_DATE AND j.start_time > CURRENT_TIME) OR (j.meeting_date > CURRENT_DATE));
+
     END
     $$ LANGUAGE plpgsql;
 
@@ -176,32 +179,36 @@ CREATE OR REPLACE FUNCTION search_room  -- start/end hour means th
     u.floor_no = u2.floor_no)
 */
 -- Done!
-CREATE OR REPLACE PROCEDURE book_room
-    (IN floor_no INTEGER, IN room_no INTEGER, IN meeting_date DATE, IN start_hour TIME, IN end_hour TIME, IN employee_id INTEGER)
-AS $$
-BEGIN
-    IF (start_hour > end_hour) THEN
-        RAISE NOTICE 'Error: start time cannot be later than end time';
-        RETURN;
-    END IF;
--- Conditions for successful booking:
--- 1. Employee is Booker (Enforced by FK reference to Booker table)
--- 2. Room is available (Enforced by PK being room, floor_no, date, start_time))
--- 3. Employee is not having a fever (Enforced by trigger)
--- 4. Employee is not resigned (Enforced by trigger)
-    WHILE (start_hour < end_hour) LOOP
-        INSERT INTO Meetings (floor_no, room, meeting_date, start_time, booker_eid, approver_eid) VALUES (floor_no, room_no, meeting_date, start_hour, employee_id, NULL);
-        start_hour := start_hour + interval '1 hour';
-    END LOOP;
+    CREATE OR REPLACE PROCEDURE book_room
+        (IN floor_no INTEGER, IN room_no INTEGER, IN meeting_date DATE, IN start_hour TIME, IN end_hour TIME, IN employee_id INTEGER)
+    AS $$
+    DECLARE
+        starting_time TIME;
+    BEGIN
+        -- Conditions for successful booking:
+        -- 1. Employee is Booker (Enforced by FK reference to Booker table)
+        -- 2. Room is available (Enforced by PK being room, floor_no, date, start_time))
+        -- 3. Employee is not having a fever (Enforced by trigger)
+        -- 4. Employee is not resigned (Enforced by trigger)
 
-    --CONSTRAINT 18: BOOKER ALSO JOINS MEETING
-    call join_meeting(floor_no, room_no, meeting_date, start_hour, end_hour, employee_id);
-END
-$$ LANGUAGE plpgsql;
+        IF (start_hour > end_hour) THEN
+            RAISE NOTICE 'Error: start time cannot be later than end time';
+            RETURN;
+        ELSE 
+                starting_time := start_hour;
+            WHILE (start_hour < end_hour) LOOP
+                INSERT INTO Meetings (floor_no, room, meeting_date, start_time, booker_eid, approver_eid) VALUES (floor_no, room_no, meeting_date, start_hour, employee_id, NULL);
+                start_hour := start_hour + interval '1 hour';
+                --CONSTRAINT 18: BOOKER ALSO JOINS MEETING
+            END LOOP;
+                CALL join_meeting(floor_no, room_no, meeting_date, starting_time, end_hour, employee_id);
+        END IF;
+    END
+    $$ LANGUAGE plpgsql;
 
 -- Done
 CREATE OR REPLACE PROCEDURE unbook_room
-        (IN floor_number INTEGER, IN room_number INTEGER, IN meeting_date DATE, IN start_hour TIME, IN end_hour TIME, IN employee_id INTEGER)
+        (IN floor_number INTEGER, IN room_number INTEGER, IN meet_date DATE, IN start_hour TIME, IN end_hour TIME, IN employee_id INTEGER)
     AS $$
     DECLARE 
         booker_eid INTEGER;
@@ -210,7 +217,7 @@ CREATE OR REPLACE PROCEDURE unbook_room
         FROM Meetings m
         WHERE m.room = room_number
         AND m.floor_no = floor_number
-        AND m.meeting_date = meeting_date
+        AND m.meeting_date = meet_date
         AND m.start_time = start_hour;
 
         IF booker_eid <> employee_id THEN
@@ -218,20 +225,20 @@ CREATE OR REPLACE PROCEDURE unbook_room
             RETURN;
         END IF;
 
-        DELETE FROM Meetings m
-        WHERE m.floor_no = floor_number 
-        AND m.room = room_number 
-        AND m.meeting_date = meeting_date
-        AND m.start_time >= start_hour 
-        AND m.start_time < end_hour 
-        AND m.booker_eid = eid;
-
         DELETE FROM Joins j
         WHERE j.room = room_number
         AND j.floor_no = floor_number
         AND j.meeting_date = meeting_date
         AND j.start_time >= start_hour
         AND j.start_time < end_hour;
+
+        DELETE FROM Meetings m
+        WHERE m.floor_no = floor_number 
+        AND m.room = room_number 
+        AND m.meeting_date = meet_date
+        AND m.start_time >= start_hour 
+        AND m.start_time < end_hour 
+        AND m.booker_eid = employee_id;
     END
     $$ LANGUAGE plpgsql;
 
@@ -264,8 +271,7 @@ BEGIN
     WHERE j.floor_no = floor_number 
     AND j.room = room_number
     AND j.meeting_date = meet_date
-    AND j.start_time >= start_hour
-    AND j.start_time < end_hour;
+    AND j.start_time >= start_h
 END
 $$ LANGUAGE plpgsql;
 
@@ -276,20 +282,15 @@ CREATE OR REPLACE PROCEDURE approve_meeting (
     IN meet_date DATE, 
     IN start_hour TIME, 
     IN end_hour TIME,
-    IN employee_id INTEGER,
-    IN decision BOOLEAN
+    IN employee_id INTEGER
 ) AS $$
 BEGIN
-    IF decision IS TRUE THEN
-        UPDATE Meetings m SET approver_eid = employee_id
-        WHERE m.floor_no = floor_number
-        AND m.room = room_number
-        AND m.meeting_date = meet_date
-        AND m.start_time >= start_hour 
-        AND m.start_time < end_hour;
-    ELSIF decision IS FALSE THEN
-        CALL reject_meeting(floor_no, room_no, meeting_date, start_hour, end_hour);
-    END IF;
+    UPDATE Meetings m SET approver_eid = employee_id
+    WHERE m.floor_no = floor_number
+    AND m.room = room_number
+    AND m.meeting_date = meet_date
+    AND m.start_time >= start_hour 
+    AND m.start_time < end_hour;
 END
 $$ LANGUAGE plpgsql;
 
@@ -314,7 +315,8 @@ CREATE OR REPLACE PROCEDURE declare_health
     (IN employee_id INTEGER, declaration_date DATE, temp NUMERIC)
 AS $$
 BEGIN
-    INSERT INTO Health_Declaration (eid, hd_date, temp, fever) VALUES (employee_id, declaration_date, temp, FALSE);
+    --- Constraint 31:
+    INSERT INTO Health_Declaration (eid, hd_date, temp, fever) VALUES (employee_id, declaration_date, temp, temp > 37.5);
 END
 $$ LANGUAGE plpgsql;
 
@@ -355,81 +357,157 @@ $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION contact_tracing
     (IN employee_id INTEGER)
-RETURNS TABLE (employee_id INTEGER) AS $$
+RETURNS TABLE (close_contact_eid INTEGER) AS $$
+DECLARE hasFever BOOLEAN;
 BEGIN
-    IF ()
+    ALTER TABLE Joins DISABLE TRIGGER valid_leave_meeting;
+    SELECT hd.fever INTO hasFever
+    FROM Health_Declaration hd
+    WHERE hd.eid = employee_id AND hd.hd_date = CURRENT_DATE; 
+
+    IF hasFever IS TRUE THEN
+        -- 3. Find all employees in the same approved meeting room from the past 3 days
+        -- Return all the employees that were in close contact
+        RETURN QUERY
+        WITH past_3D_meeting_rooms AS ( -- meetings from past 3 days that i was in
+            SELECT j.room, j.floor_no, j.start_time, j.meeting_date
+            FROM Joins j JOIN Meetings m
+            ON (j.room = m.room
+            AND j.floor_no = m.floor_no
+            AND j.meeting_date = m.meeting_date
+            AND j.start_time = m.start_time)
+            WHERE j.eid = employee_id
+            AND j.meeting_date >= CURRENT_DATE - interval '3 days'
+            AND j.meeting_date <= CURRENT_DATE
+            AND m.approver_eid IS NOT NULL
+        ), close_contact_employees AS (
+            SELECT j2.eid as close_contact_eid
+            FROM Joins j2
+            WHERE (j2.room, j2.floor_no, j2.start_time, j2.meeting_date) in (SELECT * FROM past_3D_meeting_rooms)
+        ) 
+        SELECT * FROM close_contact_employees;
+
+        WITH past_3D_meeting_rooms AS ( -- meetings from past 3 days that i was in
+            SELECT j.room, j.floor_no, j.start_time, j.meeting_date
+            FROM Joins j JOIN Meetings m
+            ON (j.room = m.room
+            AND j.floor_no = m.floor_no
+            AND j.meeting_date = m.meeting_date
+            AND j.start_time = m.start_time)
+            WHERE j.eid = employee_id
+            AND j.meeting_date >= CURRENT_DATE - interval '3 days'
+            AND j.meeting_date <= CURRENT_DATE
+            AND m.approver_eid IS NOT NULL
+        ), close_contact_employees AS (
+            SELECT j2.eid as close_contact_eid
+            FROM Joins j2
+            WHERE (j2.room, j2.floor_no, j2.start_time, j2.meeting_date) in (SELECT * FROM past_3D_meeting_rooms)
+        ) 
+        -- 3.1. Remove these employees who were close contacted from meetings for next 7 days
+        DELETE FROM Joins WHERE eid IN (SELECT * FROM close_contact_employees)
+        AND ((meeting_date = CURRENT_DATE AND start_time > CURRENT_TIME) OR (meeting_date > CURRENT_DATE))
+        AND meeting_date <= CURRENT_DATE + interval '7 days';
+
+        -- 2. Remove this employee from all future meetings
+        DELETE FROM Joins WHERE eid = employee_id AND ((meeting_date = CURRENT_DATE AND start_time > CURRENT_TIME) OR (meeting_date > CURRENT_DATE)); 
+        -- 1. Cancel all future bookings that this employee has made
+        DELETE FROM Meetings WHERE booker_eid = employee_id AND ((meeting_date = CURRENT_DATE AND start_time > CURRENT_TIME) OR (meeting_date > CURRENT_DATE));  
+    ELSE 
+		RAISE NOTICE 'Employee does not have a fever';
+    END IF;
+    ALTER TABLE Joins ENABLE TRIGGER valid_leave_meeting;
 END
-$$ LANGUAGE plpgsql
+$$ LANGUAGE plpgsql;
+
 -- Admin
 
+
+-- done!
 CREATE OR REPLACE FUNCTION non_compliance
     (IN starting_date DATE, IN end_date DATE) 
-RETURNS TABLE (
+RETURNS TABLE(
     employee_id INTEGER,
     number_of_days INTEGER
 ) AS $$
 DECLARE 
-    num_days INT := (starting_date  - end_date) + 1;
+    num_days INT := end_date - starting_date + 1;
 BEGIN
-    WITH declaration_count AS (
-        SELECT hd.eid, COUNT(*) as declare_count
-        FROM Health_Declaration hd
+RETURN QUERY
+    WITH partial_declaration_count AS ( 
+        SELECT eid
+        FROM Health_Declaration 
         WHERE hd_date >= starting_date
-        AND hd_date < end_date 
-        GROUP BY hd.eid
+        AND hd_date <= end_date 
+    ), employed AS ( 
+        SELECT eid
+        FROM Employees
+        WHERE resigned_date IS NULL
+    ), declaration_count AS (
+        SELECT employed.eid, COUNT(dc.eid) as declare_count
+        FROM partial_declaration_count dc NATURAL RIGHT JOIN employed
+        GROUP BY employed.eid
     )
-
-    SELECT dc.eid, num_days - dc.declare_count
+    SELECT dc.eid AS employee_id, (num_days - dc.declare_count)::INTEGER AS number_of_days
     FROM declaration_count dc
-
-    /*
-    CREATE OR REPLACE TEMP TABLE Temp_Table (
-        employee_id INTEGER
-    )
-    WHILE (starting_date <= ending_date) LOOP
-        Temp_Table
-        UNION
-        -- QUESTION: why use distinct when eid is PK
-        (SELECT DISTINCT eid FROM Employees
-        EXCEPT
-        SELECT eid FROM Health_Declaration WHERE hd_date = starting_date)
-        starting_date := starting_date + interval '1 day';
-    END LOOP
-    RETURN QUERY 
-        SELECT employee_id, COUNT(employee_id) as number_of_days
-        FROM Temp_Table 
-        GROUP BY employee_id
-        ORDER by COUNT(employee_id) DESC 
-    */
+    WHERE num_days - dc.declare_count > 0;
 END
 $$ LANGUAGE plpgsql;
 
--- Done
+-- Done!
 CREATE OR REPLACE FUNCTION view_booking_report
     (IN start_on DATE, eid INTEGER)
-RETURNS RECORD AS $$
+RETURNS TABLE(floor_number INTEGER, room_number INTEGER, meeting_date DATE, start_hour TIME, is_approved BOOLEAN) AS $$
 BEGIN
-    SELECT floor_no, room AS room_no, meeting_date, start_time AS start_hour, (approver_eid IS NOT NULL) AS is_approved
-    FROM Meeting
-    WHERE booker_eid = eid AND start_time >= start_on
-    ORDER BY meeting_date, start_time ASC;
+    RETURN QUERY
+    SELECT m.floor_no, m.room, m.meeting_date, m.start_time, (m.approver_eid IS NOT NULL) AS is_approved
+    FROM Meetings m
+    WHERE m.booker_eid = eid 
+    AND m.meeting_date >= start_on
+    ORDER BY m.meeting_date, m.start_time ASC; 
 END
 $$ LANGUAGE plpgsql;
 
 -- Done
 CREATE OR REPLACE FUNCTION view_future_meeting
     (IN date_start DATE, employee_id INTEGER)
-RETURNS RECORD AS $$
+RETURNS TABLE(floor_number INTEGER, room_number INTEGER, meeting_date DATE, start_time TIME) AS $$
 BEGIN
-    SELECT floor_no, room AS room_no, meeting_date, start_time AS start_hour
-    FROM Joins
-    WHERE eid = employee_id AND meeting_date >= date_start
-    ORDER BY meeting_date, start_time ASC;
+    RETURN QUERY
+    SELECT j.floor_no, j.room, j.meeting_date, j.start_time
+    FROM Joins j
+    WHERE j.eid = employee_id 
+    AND j.meeting_date >= date_start
+    AND EXISTS (SELECT 1
+                FROM Meetings m 
+                WHERE m.floor_no = j.floor_no
+                AND m.room = j.room
+                AND m.meeting_date = j.meeting_date
+                AND m.start_time = j.start_time      
+                AND approver_eid IS NOT NULL          
+                )
+    ORDER BY j.meeting_date, j.start_time ASC;
 END
 $$ LANGUAGE plpgsql;
 
+--done!
 CREATE OR REPLACE FUNCTION view_manager_report
-    (IN date_start DATE, employee_id INTEGER)
-RETURNS RECORD AS $$
-    
+    (IN date_start DATE, manager_id INTEGER)
+RETURNS TABLE (floor_number INTEGER, room_number INTEGER, meeting_date DATE, start_time TIME, employee_id INTEGER) AS $$
+DECLARE
+    dept_id INTEGER;
+BEGIN
+    IF (NOT EXISTS (SELECT 1 FROM Manager WHERE eid = manager_id)) THEN
+        RAISE NOTICE 'Error: Employee is not a manager';
+        RETURN;
+    END IF;
+    SELECT did INTO dept_id FROM Employees WHERE eid = manager_id;
+    RETURN QUERY
+    SELECT m.floor_no, m.room, m.meeting_date, m.start_time, m.booker_eid 
+    FROM Meetings m
+    WHERE dept_id = (SELECT did FROM Meeting_Rooms mr 
+                    WHERE mr.floor_no = m.floor_no
+                    AND mr.room = m.room)
+    AND m.meeting_date >= date_start
+    AND m.approver_eid IS NULL;
+END 
 $$ LANGUAGE plpgsql;

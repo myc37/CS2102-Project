@@ -97,13 +97,13 @@ CREATE TABLE Meetings (
 	FOREIGN KEY (approver_eid) REFERENCES Manager (eid) -- Approves Relation
 );
 
-CREATE TABLE Joins (
+CREATE OR REPLACE TABLE Joins (
 	room integer, 
 	floor_no integer, 
 	meeting_date date, 
 	start_time TIME,
 	eid integer,
 	PRIMARY KEY (room, floor_no, meeting_date, start_time, eid),
-	FOREIGN KEY (room, floor_no, meeting_date, start_time) REFERENCES Meetings (room, floor_no, meeting_date, start_time),
+	FOREIGN KEY (room, floor_no, meeting_date, start_time) REFERENCES Meetings (room, floor_no, meeting_date, start_time) ON DELETE CASCADE,
 	FOREIGN KEY (eid) REFERENCES Employees (eid)
 );

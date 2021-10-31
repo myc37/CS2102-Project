@@ -185,6 +185,11 @@ BEGIN
     WHERE m.room = OLD.room
     AND m.floor_no = OLD.floor_no;
 
+    IF (NEW.approver_eid NOT IN (SELECT eid FROM Manager)) THEN 
+        RAISE NOTICE 'Error: Approver is not a manager';
+        RETURN NULL;
+    END IF;
+
     IF (manager_did <> meeting_did) THEN
         RAISE NOTICE 'Error: Approver belongs to a different department than the meeting room.';
         RETURN NULL;
@@ -242,6 +247,7 @@ DECLARE
 	has_fever BOOLEAN;
     approver_id INTEGER;
 BEGIN
+    RAISE NOTICE 'Check Leave Meeting is being triggered';
 	SELECT e.resigned_date INTO resigned FROM Employees e WHERE e.eid = OLD.eid;
 	SELECT hd.fever INTO has_fever FROM Health_Declaration hd WHERE hd.hd_date = OLD.meeting_date AND eid = OLD.eid;
     SELECT m.approver_eid INTO approver_id FROM Meetings m WHERE m.room = OLD.room 
@@ -249,11 +255,12 @@ BEGIN
     AND m.meeting_date = OLD.meeting_date 
     AND m.start_time = OLD.start_time;
 	
-    IF (has_fever IS FALSE AND resigned IS NOT NULL AND approver_id IS NOT NULL) THEN
-		RAISE NOTICE 'Error: No valid reason to leave meeting';
-		RETURN NULL;
-	ELSE
+    IF (has_fever IS TRUE OR resigned IS NOT NULL OR approver_id IS NULL) THEN
 		RETURN OLD;
+	ELSE
+        RAISE NOTICE 'Error: No valid reason to leave meeting';
+		RETURN NULL;
+
 	END IF;
 END
 $$LANGUAGE plpgsql;
@@ -292,7 +299,7 @@ FOR EACH ROW EXECUTE FUNCTION same_manager_change_capacity();
 -- Syntax works
 CREATE OR REPLACE FUNCTION booking_only_future() RETURNS TRIGGER AS $$
 BEGIN
-    IF (NEW.meeting_date > CURRENT_DATE) THEN
+    IF (NEW.meeting_date < CURRENT_DATE) THEN
         RAISE NOTICE 'Error: Bookings can only be made for future dates';
         RETURN NULL;
     ELSE
@@ -329,35 +336,25 @@ FOR EACH ROW EXECUTE FUNCTION check_join_meeting_date();
 --Syntax works
 CREATE OR REPLACE FUNCTION check_approve_meeting_date() RETURNS TRIGGER AS $$
 BEGIN
-    IF (OLD.meeting_date < CURRENT_DATE) THEN -- approving past meeting
-        RAISE NOTICE 'Error: Cannot approve past meeting';
-        RETURN NULL;
-    ELSE
-        RETURN NEW;
-    END IF;
+    RAISE NOTICE 'Error: Cannot approve past meeting';
+    RETURN NULL;
 END
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE TRIGGER only_approve_future_meetings
 BEFORE
 UPDATE ON Meetings
-FOR EACH ROW EXECUTE FUNCTION check_approve_meeting_date();
+FOR EACH ROW WHEN (OLD.meeting_date < CURRENT_DATE) EXECUTE FUNCTION check_approve_meeting_date();
 
---- Constraint 31:
---Syntax works
-CREATE OR REPLACE FUNCTION check_temperature() RETURNS TRIGGER AS $$
+-- To call contact_tracing automatically upon declaring a fever
+CREATE OR REPLACE FUNCTION contact_trace_on_fever() RETURNS TRIGGER AS $$
 BEGIN
-    IF (NEW.temp > 37.5) THEN
-        NEW.fever := TRUE;
-    ELSE
-        NEW.fever := FALSE;
-    END IF;
-    RETURN NEW;
+    PERFORM contact_tracing(NEW.eid);
+    RETURN NULL;
 END
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER update_fever
-BEFORE
-INSERT ON Health_Declaration
-FOR EACH ROW EXECUTE FUNCTION check_temperature();
+CREATE TRIGGER contact_trace_on_fever
+AFTER INSERT ON Health_Declaration
+FOR EACH ROW WHEN (NEW.fever IS TRUE) EXECUTE FUNCTION contact_trace_on_fever();
 
