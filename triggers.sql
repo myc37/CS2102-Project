@@ -151,7 +151,9 @@ BEGIN
     WHERE e.eid = NEW.approver_eid;
 
     IF resigned IS TRUE THEN
-        RAISE NOTICE 'Error: Employees that have resigned are not permitted to approve a meeting.';
+        RAISE EXCEPTION USING
+            errcode='APPNR',
+            message='Error: Employees that have resigned are not permitted to approve a meeting.';
         RETURN NULL;
     ELSE 
         RETURN NEW;
@@ -288,7 +290,9 @@ BEGIN
     IF (has_fever IS TRUE OR resigned IS NOT NULL OR approver_id IS NULL) THEN
 		RETURN OLD;
 	ELSE
-        RAISE NOTICE 'Error: No valid reason to leave meeting';
+        RAISE EXCEPTION USING
+            errcode='CNLVM',
+            message='Error: No valid reason to leave meeting';
 		RETURN NULL;
 
 	END IF;

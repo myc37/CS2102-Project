@@ -248,17 +248,31 @@ CREATE OR REPLACE PROCEDURE unbook_room
 
 -- Done
 CREATE OR REPLACE PROCEDURE join_meeting
-    (IN floor_no INTEGER, IN room_no INTEGER, IN meeting_date DATE, IN start_hour TIME, IN end_hour TIME, IN employee_id INTEGER)
+    (IN floor_number INTEGER, IN room_no INTEGER, IN meet_date DATE, IN start_hour TIME, IN end_hour TIME, IN employee_id INTEGER)
     AS $$
+    DECLARE is_approved BOOLEAN;
     BEGIN
-        -- NEED TO CHECK IF THE PERSON JOINING CAN JOIN (CANNOT BE APPROVED MEETING)
+
+    SELECT (approver_eid IS NOT NULL) INTO is_approved 
+    FROM Meetings m 
+    WHERE m.floor_no = floor_number 
+    AND m.room = room_noe
+    AND m.meeting_date = meeting_date
+    AND m.start_time = start_hour;
+
+    IF (is_approved IS TRUE) THEN
+        RAISE EXCEPTION USING
+            errcode='JNAPR',
+            message='Error: Cannot join approved meeting';
+    END IF;
+    
+
     WHILE (start_hour < end_hour) LOOP
-        INSERT INTO Joins (room, floor_no, meeting_date, start_time, eid) VALUES (room_no, floor_no, meeting_date, start_hour, employee_id);
+        INSERT INTO Joins (room, floor_no, meeting_date, start_time, eid) VALUES (room_no, floor_number, meet_date, start_hour, employee_id);
         start_hour := start_hour + interval '1 hour';
     END LOOP;
-
-    END
-    $$ LANGUAGE plpgsql;
+END
+$$ LANGUAGE plpgsql;
 
 -- Done
 CREATE OR REPLACE PROCEDURE leave_meeting (
@@ -275,7 +289,9 @@ BEGIN
     WHERE j.floor_no = floor_number 
     AND j.room = room_number
     AND j.meeting_date = meet_date
-    AND j.start_time >= start_h
+    AND j.start_time >= start_hour
+    AND j.start_time < end_hour
+    AND j.eid = employee_id
 END
 $$ LANGUAGE plpgsql;
 

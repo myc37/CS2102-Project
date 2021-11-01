@@ -179,7 +179,7 @@ BEGIN
     CALL add_employee('Tab Lay', 52693691, 'Mobile', 'junior', 4);
     CALL add_employee('Ivonne Batchelder', 92713176, 'Mobile', 'senior', 7);
     CALL add_employee('Ranee Ziebart', 32335633, 'Home', 'junior', 6);
-    CALL add_employee('To be deleted', 12345678, 'Home', 'junior', 1);
+    CALL add_employee('To be deleted', 12345678, 'Home', 'manager', 1);
     ASSERT (SELECT COUNT (*) FROM Employees) = 101, 'Test 4 Failure';
     RAISE NOTICE 'Test 4 Success: Populated the database with 101 employees'; 
 END $$ LANGUAGE plpgsql;
@@ -462,6 +462,10 @@ BEGIN
     CALL tc33();
     CALL tc34();
     CALL tc35();
+    CALL tc36();
+    CALL tc37();
+    CALL tc38();
+    CALL tc39();
 
     -- Search room ()
     -- Book room ()
@@ -775,7 +779,7 @@ BEGIN
     (approver_id_first_hour IS NOT NULL AND approver_id_first_hour = 24 AND
     approver_id_second_hour IS NOT NULL AND approver_id_second_hour = 24),
     'Test 30 Failure: Meeting was not approved';
-    RAISE NOTICE 'Test 30 Success: Employee 24 successfully approveed Meeting 2-1 from 12:00 to 14:00'; 
+    RAISE NOTICE 'Test 30 Success: Employee 24 successfully approved Meeting 2-1 from 12:00 to 14:00'; 
 END
 $$ LANGUAGE plpgsql;
 
@@ -889,8 +893,6 @@ BEGIN
     AND j.meeting_date = CURRENT_DATE + 5
     AND j.start_time >= TIME '14:00' 
     AND j.start_time < TIME '16:00';
-
-
     -- Positive testing
     ASSERT (meeting_exists = 0 AND participant_exists = 0), 'Test 35 Failure: The meeting was not deleted OR the participant is still in the meeting';
     RAISE NOTICE 'Test 35 Success: Employee 60 rejected Meeting at 10-1, causing it and all its participants to be deleted'; 
@@ -898,37 +900,108 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE PROCEDURE tc_1() AS $$
-BEGIN
-    RAISE NOTICE 'Test 1 - :';
-    -- Positive testing
-    ASSERT <statement>, 'Test 1 Failure';
-    RAISE NOTICE 'Test 1 Success: Description'; 
-    -- Negative testing
-    ASSERT (num_approved = 0), 'Test 1 Failed:'
+create or replace procedure tc36() as $$
+begin
+    RAISE NOTICE 'Test 36 - Constraint 23 Employee cannot join meeting after it is approved:';
+    CALL join_meeting(2, 1, CURRENT_DATE + 1, TIME '12:00', TIME '14:00', 64);
+    RAISE NOTICE 'Test 36 Failure: Employee could join approved meeting';
     EXCEPTION 
-        WHEN sqlstate 'CODE' THEN
+        WHEN sqlstate 'JNAPR' THEN
+        RAISE NOTICE 'Test 36 Success: Employee not allowed to join approved meeting';  
+END
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR replace procedure tc37() AS $$
+DECLARE
+    num_approved INTEGER;
+BEGIN
+    raise notice 'test 37 - Constraint 34 Resigned employee cannot approve room';
+    CALL approve_meeting(1, 1, CURRENT_DATE + 1, TIME '12:00', TIME '14:00', 101);
+    
+    SELECT COUNT(*) INTO num_approved
+    FROM Meetings m
+    WHERE m.floor_no = 1
+    AND m.room = 1
+    AND m.meeting_date = CURRENT_DATE + 1
+    AND m.approver_eid IS NOT NULL
+    AND (m.start_time = TIME '12:00' OR m.start_time = TIME '13:00');
+    
+    ASSERT (num_approved = 0), 'Test 37 failure: Resigned Manager 101 is able to approve a meeting';
+    EXCEPTION 
+        WHEN sqlstate 'APPNR' THEN
+        RAISE NOTICE 'Test 37 Success: Manager 101 has resigned and so is not able to approve meeting';  
+end
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc38() AS $$
+DECLARE
+    join_count INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 38 - Resigning automatically removes the employee from future meetings:';
+
+    CALL remove_employee(52, CURRENT_DATE); -- 52 is in an approved meeting 2-1
+
+    SELECT COUNT(*) INTO join_count
+    FROM Joins j
+    WHERE j.floor_no = 2
+    AND j.room = 1
+    AND j.meeting_date = CURRENT_DATE + 1
+    AND j.start_time >= '12:00'
+    AND j.start_time < '14:00'
+    AND j.eid = 52;
+
+    ASSERT (join_count = 0), 'Test 38 Failure: Employee 52 did not automatically leave the meeting after resigning';
+    RAISE NOTICE 'Test 38 Success: Employee 52 automatically left approved future meeting 2-1 after resigning'; 
+    END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc39() AS $$
+DECLARE
+    join_count INTEGER; 
+BEGIN
+    RAISE NOTICE 'Test 39 - Constraint 23 Employees should not be able to leave a meeting after it has been approved:';
+
+    CALL leave_meeting(2, 1, CURRENT_DATE + 1, TIME '12:00', TIME '14:00', 51); -- 51 is in an approved meeting 2-1
+
+    SELECT COUNT(*) INTO join_count
+    FROM Joins j
+    WHERE j.floor_no = 2
+    AND j.room = 1
+    AND j.meeting_date = CURRENT_DATE + 1
+    AND j.start_time >= TIME '12:00'
+    AND j.start_time < TIME '14:00'
+    AND j.eid = 51;
+
+    -- negative testing
+    ASSERT (join_count = 2), 'Test 39 Failed: Employee 23 was able to leave an approved meeting with no valid reason');
+    EXCEPTION
+        WHEN sqlstate 'CNLVM' THEN
+        RAISE NOTICE 'Test 39 Success: Employee 23 was unable to leave an approved meeting 2-1 as he has no valid reason';  
+END
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE PROCEDURE tc1() AS $$
+BEGIN
+    RAISE NOTICE 'Test 1 -:';
+ -- positive testing
+    ASSERT <statement>, 'Test 1 Failure';
+    RAISE NOTICE 'Test 1 Success: description'; 
+    -- negative testing
+    ASSERT (num_approved = 0), 'Test 1 Failed:'
+    EXCEPTION
+        WHEN sqlstate 'code' THEN
         RAISE NOTICE 'Test 1 Success: Description';  
 END
 $$ LANGUAGE plpgsql;
 
--- 25 join
--- 26 join max capacity
--- 27 join cannot join twice
--- 28 join cannot join past meeting
--- 29 leave
--- 30 approve
--- 31 approve must be manager constraint 20
--- 32 approve must be same department constraint 21
--- 33 approve at most once constraint 22
--- 34 approve must be future booking constraint 27
--- 35 reject meeting is immediately deleted
 
 -- 36 unbook after approve
 -- 37 join after approve
--- 38 leave after approve no fever no resign
+-- 38 cannot leave after a meeting is approved unless they have resigned
 -- 39 leave can leave after approval if resigned
--- 
+-- 40 a resigned employee cannot book or approve meetings
 
 
 
