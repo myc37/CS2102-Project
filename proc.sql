@@ -19,7 +19,7 @@ DELETE FROM Senior;
 DELETE FROM Booker;
 DELETE FROM Junior;
 DELETE FROM Manager;
-DELETE FROM PhoneNumbers;
+DELETE FROM Phone_Numbers;
 DELETE FROM Employees;
 DELETE FROM Departments;
 END
@@ -56,13 +56,17 @@ CREATE OR REPLACE PROCEDURE add_room
 
 -- Done!
 CREATE OR REPLACE PROCEDURE change_capacity 
-        (IN floor_number INTEGER, room_number INTEGER, new_date DATE, capacity INTEGER, eid INTEGER)
+        (IN floor_number INTEGER, room_number INTEGER, new_date DATE, capacity INTEGER, employee_id INTEGER)
     AS $$ 
     BEGIN
     IF ((floor_number, room_number, new_date) NOT IN (Select floor_no, room, update_date from Updates)) THEN
-        INSERT INTO Updates (floor_no, room, update_date, new_capacity, eid) VALUES (floor_number, room_number, new_date, capacity, eid);
+        INSERT INTO Updates (floor_no, room, update_date, new_capacity, eid) VALUES (floor_number, room_number, new_date, capacity, employee_id);
     ELSE
-        UPDATE Updates SET new_capacity = capacity WHERE floor_no = floor_number AND room = room_number AND update_date = new_date;
+        UPDATE Updates 
+        SET new_capacity = capacity, eid = employee_id 
+        WHERE floor_no = floor_number 
+        AND room = room_number 
+        AND update_date = new_date;
     END IF;
     END
     $$ LANGUAGE plpgsql;
@@ -71,7 +75,7 @@ CREATE OR REPLACE PROCEDURE change_capacity
 -- added this procedure
 CREATE OR REPLACE PROCEDURE add_phone_number (IN employee_id INTEGER, IN phone_number INTEGER, IN phone_type TEXT) AS $$
         BEGIN
-            INSERT INTO PhoneNumbers (eid, phone_number, phone_type) VALUES (employee_id, phone_number, phone_type);
+            INSERT INTO Phone_Numbers (eid, phone_number, phone_type) VALUES (employee_id, phone_number, phone_type);
         END
         $$ LANGUAGE plpgsql;
 
@@ -92,10 +96,10 @@ CREATE OR REPLACE PROCEDURE add_employee
         IF kind = 'junior' THEN
             INSERT INTO Junior VALUES (employee_id);
         ELSIF kind = 'senior' THEN
-            INSERT INTO Booker VALUES (employee_id);
+            -- INSERT INTO Booker VALUES (employee_id);
             INSERT INTO Senior VALUES (employee_id);
         ELSIF kind = 'manager' THEN 
-            INSERT INTO Booker VALUES (employee_id);
+            -- INSERT INTO Booker VALUES (employee_id);
             INSERT INTO Manager VALUES (employee_id);
         END IF;
         CALL add_phone_number(employee_id, phone_number, phone_type);
@@ -180,7 +184,7 @@ CREATE OR REPLACE FUNCTION search_room  -- start/end hour means th
 */
 -- Done!
     CREATE OR REPLACE PROCEDURE book_room
-        (IN floor_no INTEGER, IN room_no INTEGER, IN meeting_date DATE, IN start_hour TIME, IN end_hour TIME, IN employee_id INTEGER)
+        (IN floor_number INTEGER, IN room_number INTEGER, IN meet_date DATE, IN start_hour TIME, IN end_hour TIME, IN employee_id INTEGER)
     AS $$
     DECLARE
         starting_time TIME;
@@ -197,11 +201,10 @@ CREATE OR REPLACE FUNCTION search_room  -- start/end hour means th
         ELSE 
                 starting_time := start_hour;
             WHILE (start_hour < end_hour) LOOP
-                INSERT INTO Meetings (floor_no, room, meeting_date, start_time, booker_eid, approver_eid) VALUES (floor_no, room_no, meeting_date, start_hour, employee_id, NULL);
+                INSERT INTO Meetings (floor_no, room, meeting_date, start_time, booker_eid, approver_eid) VALUES (floor_number, room_number, meet_date, start_hour, employee_id, NULL);
                 start_hour := start_hour + interval '1 hour';
-                --CONSTRAINT 18: BOOKER ALSO JOINS MEETING
             END LOOP;
-                CALL join_meeting(floor_no, room_no, meeting_date, starting_time, end_hour, employee_id);
+            CALL join_meeting(floor_number, room_number, meet_date, starting_time, end_hour, employee_id);
         END IF;
     END
     $$ LANGUAGE plpgsql;
@@ -221,8 +224,9 @@ CREATE OR REPLACE PROCEDURE unbook_room
         AND m.start_time = start_hour;
 
         IF booker_eid <> employee_id THEN
-            RAISE NOTICE 'Error: Only the booker of the meeting is allowed to unbook the room';
-            RETURN;
+            RAISE EXCEPTION USING
+                errcode:= 'NOSBT',
+                message:= 'Error: Only the booker of the meeting is allowed to unbook the room';
         END IF;
 
         DELETE FROM Joins j
@@ -296,9 +300,31 @@ $$ LANGUAGE plpgsql;
 
 -- Done
 CREATE OR REPLACE PROCEDURE reject_meeting (
-    IN floor_number INTEGER, IN room_number INTEGER, IN meet_date DATE, IN start_hour TIME, IN end_hour TIME
+    IN floor_number INTEGER, IN room_number INTEGER, IN meet_date DATE, IN start_hour TIME, IN end_hour TIME, IN employee_id INTEGER
 ) AS $$
+DECLARE 
+    mgr_dept INTEGER;
+    rm_dept INTEGER;
 BEGIN
+    -- Employee is a manager
+    IF (employee_id NOT IN (SELECT eid FROM Manager)) THEN
+        RAISE EXCEPTION USING
+            errcode= 'NOMGR',
+            message= 'Error: Non manager cannot approve or reject meeting';
+    END IF;
+
+    -- Employee is in the same department
+    SELECT did INTO mgr_dept
+    FROM Employees
+    WHERE eid = employee_id
+    
+    IF (mgr_dept <> rm_dept) THEN 
+        RAISE EXCEPTION USING
+            errcode='DIFFD'
+            message='Error: Manager can only approve or reject meetings in the same department';
+    END IF;
+            
+
     DELETE FROM Meetings m
     WHERE m.floor_no = floor_number
     AND m.room = room_number
@@ -319,41 +345,6 @@ BEGIN
     INSERT INTO Health_Declaration (eid, hd_date, temp, fever) VALUES (employee_id, declaration_date, temp, temp > 37.5);
 END
 $$ LANGUAGE plpgsql;
-
-/*
-CREATE OR REPLACE FUNCTION contact_tracing 
- (IN employee_id INTEGER)
-RETURNS TABLE(contacts INTEGER) AS $$
-DECLARE
-    Bookings CURSOR FOR 
-        SELECT room, floor_no, meeting_date, start_time 
-        FROM Meetings
-        WHERE booker_eid = employee.id;
-    Attended_Rooms CURSOR FOR
-        SELECT room, floor_no 
-        FROM Joins
-        WHERE eid = employee_id
-        AND meeting_date ;
-BEGIN
-    DELETE * 
-    FROM Joins 
-    WHERE eid = employee.id
-    AND meeting_date > CURRENT_DATE;
-    FOR b IN (SELECT * FROM Bookings) LOOP
-        DELETE FROM Meetings m WHERE 
-        m.floor_no = b.floor_no
-        AND m.room = b.room
-        AND m.meeting_date = b.meeting_date
-        AND m.start_time = b.start_time
-    END LOOP;
-    FOR a in (SELECT * FROM Attended_Rooms) LOOP
-        SELECT eid INTO TABLE FROM Joins j WHERE
-        room j.room = a.room
-        AND j.floor = a.floor;
-    
-END
-$$ LANGUAGE plpgsql;
-*/
 
 CREATE OR REPLACE FUNCTION contact_tracing
     (IN employee_id INTEGER)

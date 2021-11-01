@@ -19,7 +19,7 @@ CREATE TABLE Employees (
 -- Done
 -- Assumptions:
 -- 1. Employees can share the same home/office/mobile numbers
-CREATE TABLE PhoneNumbers (
+CREATE TABLE Phone_Numbers (
 	eid integer NOT NULL,
 	phone_number INTEGER,
 	phone_type TEXT,
@@ -79,8 +79,8 @@ CREATE TABLE Updates (
 	floor_no integer,
 	update_date date,
 	new_capacity integer NOT NULL,
-	eid integer,
-	PRIMARY KEY (eid, room, floor_no, update_date),
+	eid integer, -- why is this PK
+	PRIMARY KEY (room, floor_no, update_date),
 	FOREIGN KEY (room, floor_no) REFERENCES Meeting_Rooms (room, floor_no),
 	FOREIGN KEY (eid) REFERENCES Manager (eid)
 );

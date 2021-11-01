@@ -1,9 +1,11 @@
-CREATE OR REPLACE PROCEDURE tc_() AS $$
+-- BASIC FUNCTIONALITY TEST CASES
+
+CREATE OR REPLACE PROCEDURE test_all() AS $$
 BEGIN
+    CALL basic_func();
+    CALL core_func();
 END
 $$ LANGUAGE plpgsql;
-
--- BASIC FUNCTIONALITY TEST CASES
 
 CREATE OR REPLACE PROCEDURE basic_func() AS $$
 BEGIN
@@ -14,6 +16,15 @@ BEGIN
     CALL tc2();
     CALL tc3();
     CALL tc4();
+    CALL tc5();
+    CALL tc6();
+    CALL tc7();
+    CALL tc8();
+    CALL tc9();
+    CALL tc10();
+    CALL tc11();
+    CALL tc12();
+    CALL tc13();
 END
 $$ LANGUAGE plpgsql;
 
@@ -47,11 +58,12 @@ $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE PROCEDURE tc2() AS $$
 BEGIN
-    RAISE NOTICE 'Test 2 - Constraint: Unable to add a department ID that already exists';
+    RAISE NOTICE 'Test 2 - Constraint 4 Unique Department ID & Constraint 5 Department Name:';
     CALL add_department(1, 'Marketing'); 
-EXCEPTION 
-    when sqlstate '23505' THEN
-    RAISE NOTICE 'Test 2 Success: Primary Key Constraint Is Working';
+    RAISE NOTICE 'Test 2 Failure';
+    EXCEPTION 
+        WHEN sqlstate '23505' THEN
+        RAISE NOTICE 'Test 2 Success: Constraint 4 & Constraint 5 Enforced';
 END
 $$ LANGUAGE plpgsql;
 
@@ -171,6 +183,764 @@ BEGIN
     ASSERT (SELECT COUNT (*) FROM Employees) = 101, 'Test 4 Failure';
     RAISE NOTICE 'Test 4 Success: Populated the database with 101 employees'; 
 END $$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc5() AS $$
+BEGIN
+    RAISE NOTICE 'Test 5 - Constraint 1 Unique Employee ID:';
+    INSERT INTO Employees (eid, did, email, ename, resigned_date) VALUES (1, 1, 'Adel_Stannislawski_1@bluewhale.org', 'Adel Stannislawski', NULL);
+    RAISE NOTICE 'Test 5 Failure';
+    EXCEPTION 
+        WHEN sqlstate '23505' THEN
+        RAISE NOTICE 'Test 5 Success: Constraint 1 Unique Employee ID Enforced'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc6() AS $$
+BEGIN
+    RAISE NOTICE 'Test 6 - Constraint 2 Unique Email Address:';
+    UPDATE Employees SET email = 'Adel_Stannislawski_1@bluewhale.org' WHERE eid = 2; 
+    RAISE NOTICE 'Test 6 Failure';
+    EXCEPTION 
+        WHEN sqlstate '23505' THEN
+        RAISE NOTICE 'Test 6 Success: Constraint 2 Unique Email Enforced'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc7() AS $$
+BEGIN
+    CALL tc7_1();
+    CALL tc7_2();
+    CALL tc7_3();
+    CALL tc7_4();
+    CALL tc7_5();
+    CALL tc7_6();
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc7_1() AS $$
+DECLARE senior_count INTEGER;
+BEGIN
+    SELECT COUNT(*) INTO senior_count FROM Senior;
+    RAISE NOTICE 'Test 7.1 - Constraint 12 Employee must be one of each kind - Adding a Junior into Senior:';
+    INSERT INTO Senior (eid) VALUES (1); -- Employee is a junior
+    ASSERT ((SELECT COUNT (*) FROM Senior) = senior_count), 'Test 7.1 Failure';
+    EXCEPTION 
+        WHEN sqlstate 'BJISA' THEN
+        RAISE NOTICE 'Test 7.1 Success'; 
+
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc7_2() AS $$
+DECLARE manager_count INTEGER;
+BEGIN
+    SELECT COUNT(*) INTO manager_count FROM Manager;
+    RAISE NOTICE 'Test 7.2 - Constraint 12 Employee must be one of each kind - Adding a Junior into Manager';
+    INSERT INTO Manager (eid) VALUES (1); -- Employee is a junior
+    ASSERT ((SELECT COUNT(*) FROM Manager) = manager_count), 'Test 7.2 Failure';
+    EXCEPTION 
+        WHEN sqlstate 'BJISA' THEN
+        RAISE NOTICE 'Test 7.2 Success'; 
+
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc7_3() AS $$
+DECLARE junior_count INTEGER;
+BEGIN
+    SELECT COUNT(*) INTO junior_count FROM Junior;
+    RAISE NOTICE 'Test 7.3 - Constraint 12 Employee must be one of each kind - Adding a Senior into Junior:';
+    INSERT INTO Junior (eid) VALUES (77); -- Employee is a Senior
+    RAISE NOTICE 'Test 7.3 Failure';
+    ASSERT ((SELECT COUNT(*) FROM Junior) = junior_count),'Test 7.3 Failure';
+    EXCEPTION 
+        WHEN sqlstate 'JBISA' THEN
+        RAISE NOTICE 'Test 7.3 Success'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc7_4() AS $$
+DECLARE manager_count INTEGER;
+BEGIN
+    SELECT COUNT(*) INTO manager_count FROM Manager;
+    RAISE NOTICE 'Test 7.4 - Constraint 12 Employee must be one of each kind - Already a Senior into Manager';
+    INSERT INTO Manager (eid) VALUES (77); -- Employee is a Senior
+    ASSERT ((SELECT COUNT(*) FROM Manager) = manager_count), 'Test 7.4 Failure';
+    EXCEPTION 
+        WHEN sqlstate 'MSISA' THEN
+        RAISE NOTICE 'Test 7.4 Success'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc7_5() AS $$
+DECLARE junior_count INTEGER;
+BEGIN
+    SELECT COUNT(*) INTO junior_count FROM Junior;
+    RAISE NOTICE 'Test 7.5 - Constraint 12 Employee must be one of each kind - Adding a Manager into Junior:';
+    INSERT INTO Junior (eid) VALUES (82); -- Employee is a Manager
+    ASSERT ((SELECT COUNT(*) FROM Junior) = junior_count),'Test 7.5 Failure';
+    EXCEPTION 
+        WHEN sqlstate 'JBISA' THEN
+        RAISE NOTICE 'Test 7.5 Success'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc7_6() AS $$
+DECLARE senior_count INTEGER;
+BEGIN
+    SELECT COUNT(*) INTO senior_count FROM Senior;
+    RAISE NOTICE 'Test 7.6 - Constraint 12 Employee must be one of each kind - Already a Manager into Senior';
+    INSERT INTO Senior (eid) VALUES (82); -- Employee is a Manager
+    ASSERT ((SELECT COUNT(*) FROM Senior) = senior_count), 'Test 7.6 Failure';
+    EXCEPTION 
+        WHEN sqlstate 'SMISA' THEN
+        RAISE NOTICE 'Test 7.6 Success'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc8() AS $$
+DECLARE non_resigned INTEGER;
+DECLARE employee_resigned_date DATE;
+BEGIN
+    SELECT COUNT(*) INTO non_resigned FROM Employees WHERE resigned_date IS NULL ;
+    RAISE NOTICE 'Test 8 - remove_employee routine';
+    CALL remove_employee(101, CURRENT_DATE);
+    SELECT resigned_date INTO employee_resigned_date FROM Employees WHERE eid = 101; 
+    IF employee_resigned_date IS NOT NULL THEN
+        RAISE NOTICE 'Test 8 Success: Remove Employee is Functional';
+    ELSE
+        RAISE NOTICE 'Test 8 Failure';
+    END IF;
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc9() AS $$
+DECLARE phone_rows INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 9 - add_phone_number routine (Helper routine)';
+    CALL add_phone_number(1, 83948244, 'Home');
+    SELECT COUNT(*) INTO phone_rows FROM Phone_Numbers WHERE eid = 1;
+    ASSERT (phone_rows != 1), 'Test 9 Failure';
+    RAISE NOTICE 'Test 9 Success: Adding Phone Number is Functional';
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc10() AS $$
+DECLARE phone_rows INTEGER;
+BEGIN
+    SELECT COUNT(*) FROM Phone_Numbers INTO phone_rows;
+    RAISE NOTICE 'Test 10 - Primary Constraint (eid, phone_type) in Phone_Numbers';
+    INSERT INTO Phone_Numbers VALUES (1, 917824, 'Office');
+    ASSERT ((SELECT COUNT(*) FROM Phone_Numbers) = phone_rows), 'Test 10 Failure';
+    EXCEPTION
+        WHEN sqlstate '23505' THEN 
+        RAISE NOTICE 'Test 10 Success: Primary Key Constraint of Phone_Numbers'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc11() AS $$
+DECLARE phone_rows INTEGER;
+BEGIN
+    SELECT COUNT(*) FROM Phone_Numbers INTO phone_rows;
+    RAISE NOTICE 'Test 11 - Foreign Key Constraint Phone_Numbers (eid)';
+    INSERT INTO Phone_Numbers VALUES (5000, 917824, 'Office');
+    ASSERT ((SELECT COUNT(*) FROM Phone_Numbers) = phone_rows), 'Test 11 Failure';
+    EXCEPTION
+        WHEN sqlstate '23503' THEN 
+        RAISE NOTICE 'Test 11 Success: Foreign Key Constraint (eid) of Phone_Numbers'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc12() AS $$
+BEGIN
+    RAISE NOTICE 'Test 12 - add_room routine:';
+    CALL add_room(1, 1, 'Room 1-1', 5, 1, 2);
+    CALL add_room(1, 2, 'Room 1-2', 5, 1, 10);
+    CALL add_room(2, 1, 'Room 2-1', 5, 2, 75);
+    CALL add_room(3, 1, 'Room 3-1', 5, 3, 66);
+    CALL add_room(4, 1, 'Room 4-1', 5, 4, 71);
+    CALL add_room(5, 1, 'Room 5-1', 5, 5, 43);
+    CALL add_room(6, 1, 'Room 6-1', 5, 6, 58);
+    CALL add_room(7, 1, 'Room 7-1', 5, 7, 82);
+    CALL add_room(8, 1, 'Room 8-1', 5, 8, 39);
+    CALL add_room(9, 1, 'Room 9-1', 5, 9, 78);
+    CALL add_room(10, 1, 'Room 10-1', 5, 10, 79);
+    CALL add_room(10, 2, 'Room 10-2', 5, 10, 87);
+    CALL add_room(10, 3, 'Room 10-3', 5, 10, 87);
+    ASSERT (SELECT COUNT(*) FROM Meeting_Rooms) = 13, 'Test 12 Failure';
+    RAISE NOTICE 'Test 12 Success: Populated the database with 13 meeting rooms with an initial capacity of 5'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc13() AS $$
+BEGIN
+    CALL tc13_1();
+    CALL tc13_2();
+    CALL tc13_3();
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc13_1() AS $$
+    DECLARE new_cap INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 13.1 - Constraint 24 Only manager from the same department can change capacity:';
+    CALL change_capacity(1,1,CURRENT_DATE, 8,10); -- 10 is a Manager from Dept 1
+    SELECT u.new_capacity INTO new_cap
+    FROM Updates u
+    WHERE u.eid = 10
+    AND u.room = 1
+    AND u.floor_no = 1
+    AND u.update_date = CURRENT_DATE;
+    ASSERT (new_cap = 8), 'Test 13.1 Failure';
+    RAISE NOTICE 'Test 13.1 Success: Capacity for Room 1-1 changed from 5 to 8'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc13_2() AS $$
+    DECLARE new_cap INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 13.2 - Constraint 24 Only manager from the same department can change capacity - Non manager:';
+    CALL change_capacity(1,1,CURRENT_DATE, 8,57); -- 57 is a Junior from Dept 1
+    SELECT u.new_capacity INTO new_cap
+    FROM Updates u
+    WHERE u.eid = 57
+    AND u.room = 1
+    AND u.floor_no = 1
+    AND u.update_date = CURRENT_DATE;
+    ASSERT (new_cap IS NULL), 'Test 13.2 Failure';
+    EXCEPTION 
+        WHEN sqlstate 'OMGRC' THEN
+        RAISE NOTICE 'Test 13.2 Success: Non manager is unable to change the capacity'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc13_3() AS $$
+    DECLARE new_cap INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 13.3 - Constraint 24 Only manager from the same department can change capacity - Different department:';
+    CALL change_capacity(1,1,CURRENT_DATE, 8,24); -- 24 is a Manager from Dept 2
+    SELECT u.new_capacity INTO new_cap
+    FROM Updates u
+    WHERE u.eid = 24
+    AND u.room = 1
+    AND u.floor_no = 1
+    AND u.update_date = CURRENT_DATE;
+    ASSERT (new_cap IS NULL), 'Test 13.3 Failure';
+    EXCEPTION 
+        WHEN sqlstate 'SMGRC' THEN
+        RAISE NOTICE 'Test 13.3 Success: Manager from different department is unable to change the capacity
+        '; 
+END
+$$ LANGUAGE plpgsql;
+
+-- CORE FUNCTIONALITY
+
+CREATE OR REPLACE PROCEDURE core_func() AS $$
+BEGIN
+    RAISE NOTICE 'CORE FUNCTIONALITY TESTS
+    ';
+
+    CALL tc14(); 
+    CALL tc15();
+    CALL tc16();
+    CALL tc17(); 
+    CALL tc18();
+    CALL tc19();    
+    CALL tc20();
+    CALL tc21();
+    CALL tc22();
+    CALL tc23();
+    CALL tc24(); 
+    CALL tc25();
+    CALL tc26();
+    CALL tc27(); 
+    CALL tc28();
+    CALL tc29();    
+    CALL tc30();
+    CALL tc31();
+    CALL tc32();
+    CALL tc33();
+    CALL tc34();
+    CALL tc35();
+
+    -- Search room ()
+    -- Book room ()
+    -- Unbook room ()
+    -- Join meeting ()
+    -- Leave meeting ()
+    -- Approve meeting (Cannot join after approved, cannot leave after approved, cannot unbook room after approved)
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc14() AS $$
+DECLARE
+    free_rooms INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 14 - search_room routine:';
+    SELECT COUNT(*) INTO free_rooms
+    FROM search_room(5, CURRENT_DATE, CURRENT_TIME::TIME, (CURRENT_TIME::TIME + INTERVAL '1 HOUR')::TIME);
+    ASSERT (free_rooms = 13), 'Test 14 Failure';
+    RAISE NOTICE 'Test 14 Success: Found 13 available rooms with capacity of at least 5 currently'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc15() AS $$
+DECLARE
+    free_rooms INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 15 - search_room routine:';
+    SELECT COUNT(*) INTO free_rooms
+    FROM search_room(8, CURRENT_DATE, CURRENT_TIME::TIME, (CURRENT_TIME::TIME + INTERVAL '1 HOUR')::TIME);
+    ASSERT (free_rooms = 1), 'Test 15 Failure';
+    RAISE NOTICE 'Test 15 Success: Found 1 available room with capacity of at least 8 currently'; 
+END
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE PROCEDURE tc16() AS $$
+BEGIN
+    RAISE NOTICE 'Test 16 - book_room routine:';
+    CALL book_room(1, 1, CURRENT_DATE + 1, TIME '12:00', TIME '14:00', 48); -- Senior Dept 1
+    CALL book_room(1, 1, CURRENT_DATE + 2, TIME '12:00', TIME '14:00', 48); -- Senior Dept 1
+    CALL book_room(1, 1, CURRENT_DATE + 3, TIME '12:00', TIME '14:00', 48); -- Senior Dept 1
+    CALL book_room(2, 1, CURRENT_DATE + 1, TIME '12:00', TIME '14:00', 75); -- Senior Dept 2
+    CALL book_room(2, 1, CURRENT_DATE + 1, TIME '16:00', TIME '18:00', 75); -- Senior Dept 2
+    CALL book_room(3, 1, CURRENT_DATE + 1, TIME '12:00', TIME '14:00', 48); -- Senior Dept 3
+    CALL book_room(3, 1, CURRENT_DATE + 2, TIME '12:00', TIME '14:00', 36); -- Senior Dept 3
+    CALL book_room(10, 1, CURRENT_DATE + 3, TIME '14:00', TIME '16:00', 79); -- Manager Dept 10
+    CALL book_room(10, 1, CURRENT_DATE + 4, TIME '14:00', TIME '16:00', 79); -- Manager Dept 10
+    CALL book_room(10, 1, CURRENT_DATE + 5, TIME '14:00', TIME '16:00', 79); -- Manager Dept 10
+    CALL book_room(7, 1, CURRENT_DATE + 1, TIME '12:00', TIME '13:00', 82); -- Senior Dept 7 (To be deleted)
+    -- booking a past meeting
+    ALTER TABLE Meetings DISABLE TRIGGER booking_only_future;
+    ALTER TABLE Joins DISABLE TRIGGER only_join_future_meetings;
+    CALL book_room(5, 1, CURRENT_DATE - 1, TIME '12:00', TIME '13:00', 38); -- Senior dept 5
+    ALTER TABLE Meetings ENABLE TRIGGER booking_only_future;
+    ALTER TABLE Joins ENABLE TRIGGER only_join_future_meetings;
+    -- booked a past meeting
+    ASSERT ((SELECT COUNT(*) FROM Meetings) = 22), format('Test 16 Failure: There are %s instead of 21 meetings booked', (SELECT COUNT (*) FROM Meetings));
+    RAISE NOTICE 'Test 16 Success: Database populated with 22 (10 x 2 hours + 2 x 1 hour) meetings'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc17() AS $$
+DECLARE
+    is_in_meeting BOOLEAN;
+BEGIN
+    RAISE NOTICE 'Test 17 - Constraint 18 Employee booking the room immediately joins the meeting:';
+    SELECT j.eid IS NOT NULL INTO is_in_meeting
+    FROM Joins j
+    WHERE j.room = 1
+    AND j.floor_no = 1
+    AND j.meeting_date = CURRENT_DATE + 1
+    AND j.start_time = '12:00'
+    AND j.eid = 48;
+    ASSERT (is_in_meeting IS TRUE), 'Test 17 Failure: Employee booking the room did not join the meeting';
+    RAISE NOTICE 'Test 17 Success: Employee ID 48 who booked Room 1-1 immediately joined meeting'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc18() AS $$
+BEGIN
+    RAISE NOTICE 'Test 18 - Constraint 13 Junior cannot book a room';
+    CALL book_room(1, 1, CURRENT_DATE + 4, TIME '12:00', TIME '14:00', 32); -- Junior Dept 1
+    RAISE NOTICE 'Test 18 Failed: Junior could book a room.';
+    EXCEPTION  
+        WHEN sqlstate '23503' THEN
+        RAISE NOTICE 'Test 18 Success: Junior with employee ID 32 is unable to book a room in department 1'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc19() AS $$
+DECLARE 
+    booker_id INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 19 - Constraint 15 Meeting room can only booked by one group for a given date and time';
+    CALL book_room(1, 1, CURRENT_DATE + 1, TIME '12:00', TIME '13:00', 91); -- Senior Dept 1
+    SELECT m.booker_eid INTO booker_id
+    FROM Meetings m
+    WHERE m.room = 1
+    AND m.floor_no = 1
+    AND m.start_time = TIME '12:00'
+    AND m.meeting_date = CURRENT_DATE + 1;
+    ASSERT (booker_id = 48), 'Test 19 Failure: Booker ID should not have changed from 48';
+    EXCEPTION 
+        WHEN sqlstate '23505' THEN
+        RAISE NOTICE 'Test 19 Success: Room 1-1 cannot be booked by employee 91 as it has already been booked by employee 48';
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc_20() AS $$
+BEGIN
+    RAISE NOTICE 'Test 20 - Constraint 26 Employees can only join future meetings'; 
+    CALL book_room(5, 1, CURRENT_DATE - 1, TIME '12:00', TIME '13:00', 38); -- Senior dept 5
+    EXCEPTION
+        WHEN sqlstate 'OBFMT' THEN 
+            RAISE NOTICE 'Test 20 Success: Employee 38 could not book Meeting Room 5-1 from 12:00 to 13:00 on the previous day'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc21() AS $$
+DECLARE
+    free_rooms INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 21 - search_room routine AFTER book_room:';
+    SELECT COUNT(*) INTO free_rooms
+    FROM search_room(5, CURRENT_DATE + 1, TIME '12:00', TIME '13:00');
+    ASSERT (free_rooms = 9), 'Test 21 Failure: There should be 9 available rooms (Room 1-1, 2-1, 3-1, 7-1 are booked)';
+    RAISE NOTICE 'Test 21 Success: Found 10 available rooms with capacity of at least 5 tomorrow from 12:00 to 13:00'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc22() AS $$
+DECLARE
+    is_unbooked BOOLEAN;
+BEGIN
+    RAISE NOTICE 'Test 22 - unbook_room routine:';
+    CALL unbook_room(7, 1, CURRENT_DATE + 1, TIME '12:00', TIME '13:00', 82); -- Senior dept 7
+    is_unbooked := (1, 7, CURRENT_DATE + 1, TIME '14:00') NOT IN (SELECT m.room, m.floor_no, m.meeting_date, m.start_time FROM Meetings m);
+    ASSERT (is_unbooked IS TRUE), 'Test 22 Failure';
+    RAISE NOTICE 'Test 22 Success: Room 7-1 unbooked'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc23() AS $$
+DECLARE
+    meeting_exists BOOLEAN;
+BEGIN
+    RAISE NOTICE 'Test 23 - unbook_room routine - No sabotage rule:';
+    CALL unbook_room(10, 1, CURRENT_DATE + 5, TIME '14:00', TIME '16:00', 23); -- 23 is a senior from dept 10 but is NOT the booker
+    SELECT m.booker_eid IS NOT NULL INTO meeting_exists
+    FROM Meetings m
+    WHERE m.room = 1
+    AND m.floor_no = 10
+    AND m.start_time = TIME '14:00'
+    AND m.meeting_date = CURRENT_DATE + 5;
+    ASSERT (meeting_exists IS FALSE), 'Test 23 Failure: The meeting was unbooked by an employee that did not book the meeting';
+    EXCEPTION 
+        WHEN sqlstate 'NOSBT' THEN
+        RAISE NOTICE 'Test 23 Success: Employee 23 was unable to unbook a meeting that Employee 79 booked';
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc24() AS $$
+DECLARE
+    free_rooms INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 24 - search_room routine AFTER unbook_room:';
+    SELECT COUNT(*) INTO free_rooms
+    FROM search_room(5, CURRENT_DATE + 1, TIME '12:00', TIME '13:00');
+    ASSERT (free_rooms = 10), 'Test 24 Failure: There should be 10 available rooms (As Room 7-1 was unbooked)';
+    RAISE NOTICE 'Test 24 Success: Found 10 available rooms with capacity of at least 5 tomorrow from 12:00 to 13:00 after unbooking Room 7-1';
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc25() AS $$
+DECLARE
+    half_meeting INTEGER;
+    full_meeting INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 25 - join_meeting routine';
+    CALL join_meeting(2,1, CURRENT_DATE + 1, TIME '12:00', TIME '14:00', 51);
+    CALL join_meeting(2,1, CURRENT_DATE + 1, TIME '12:00', TIME '14:00', 52);
+    CALL join_meeting(2,1, CURRENT_DATE + 1, TIME '12:00', TIME '13:00', 53);
+    CALL join_meeting(2,1, CURRENT_DATE + 1, TIME '12:00', TIME '13:00', 54);
+
+    SELECT COUNT(*) INTO half_meeting -- There should be 5 entries from 12:00 to 13:00
+    FROM Joins j
+    WHERE j.floor_no = 2
+    AND j.room = 1
+    AND j.meeting_date = CURRENT_DATE + 1
+    AND j.start_time = TIME '12:00';
+
+    SELECT COUNT(*) INTO full_meeting -- There should be 8 entries from 12:00 to 14:00
+    FROM Joins j
+    WHERE j.floor_no = 2
+    AND j.room = 1
+    AND j.meeting_date = CURRENT_DATE + 1
+    AND j.start_time >= TIME '12:00'
+    AND j.start_time < TIME '14:00';
+
+    ASSERT (half_meeting = 5 AND full_meeting = 8), 'Test 25 Failure: The number of people joining the meeting is wrong';
+    RAISE NOTICE 'Test 25 Success: Employee 51 and 52 are joining Meeting Room 2-1 from 12:00 to 14:00 and Employee 53 and 53 are joining Meeting Room from 2-1 12:00 to 13:00'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc26() AS $$
+DECLARE
+    is_present INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 26 - Constraint 36 Employee cannot join a meeting that is already at full capacity';
+    CALL join_meeting(2, 1, CURRENT_DATE + 1, TIME '12:00', TIME '13:00', 55);
+
+    SELECT j.eid INTO is_present
+    FROM Joins j
+    WHERE j.floor_no = 2
+    AND j.room = 1
+    AND j.meeting_date = CURRENT_DATE + 1
+    AND j.start_time = TIME '12:00';
+
+    ASSERT (is_present IS NULL), 'Test 26 Failure: Employee 55 was able to join a meeting room that is full';
+    EXCEPTION 
+        WHEN sqlstate 'FULLR' THEN
+            RAISE NOTICE 'Test 26 Success: Employee 55 not able to join Meeting Room 2-1 from 12:00 to 13:00 because it is already at full capacity';
+END
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE PROCEDURE tc27() AS $$
+DECLARE num_present INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 27 - Constraint 37 Employee cannot join a meeting that they have already joined';
+    CALL join_meeting(1, 1, CURRENT_DATE + 1, TIME '12:00', TIME '14:00', 48);
+    
+    SELECT COUNT(*) INTO num_present
+    FROM Joins J
+    WHERE j.floor = 1
+    AND j.room_no = 1
+    AND j.meeting_date = CURRENT_DATE + 1
+    AND j.eid = 48
+    AND (j.start_time = TIME '12:00' OR j.start_time = TIME '13:00');
+    ASSERT (num_present = 2), 'Test 27 Failure: Employee 48 joined Meeting Room 2-1 from 12:00 to 14:00 twice';
+    EXCEPTION 
+        WHEN sqlstate '23505' THEN 
+            RAISE NOTICE 'Test 27 Success: Employee 48 not able to join Meeting Room 2-1 from 12:00 to 14:00 again as he had already joined the meeting';     
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc28() AS $$
+DECLARE 
+    num_joined INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 28 - Constraint 26 Employees can only join future meetings';
+    CALL join_meeting(5, 1, CURRENT_DATE - 1, TIME '12:00', TIME '13:00', 74); -- Senior dept 5
+    SELECT COUNT(eid) INTO num_joined
+    FROM Joins j
+    WHERE j.floor = 5
+    AND j.room_no = 1
+    AND j.meeting_date = CURRENT_DATE -1
+    and j.start_time = TIME '12:00';
+    ASSERT (num_joined = 1), 'Test case 28 Failure: Employee 74 able to join a past meeting';
+    EXCEPTION
+        WHEN sqlstate 'OJFMT' THEN 
+            RAISE NOTICE 'Test 28 Success: Employee 74 could not join Meeting Room 5-1 from 12:00 to 13:00 as it is already over'; 
+END
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE PROCEDURE tc29() AS $$
+DECLARE
+    present INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 29 - leave_meeting routine'; 
+    CALL leave_meeting(2,1, CURRENT_DATE + 1, TIME '12:00', TIME '13:00', 54);
+
+    SELECT COUNT(*) INTO present
+    FROM Joins j
+    WHERE j.floor_no = 2
+    AND j.room = 1
+    AND j.meeting_date = CURRENT_DATE + 1
+    AND j.start_time >= TIME '12:00'
+    AND j.start_time < TIME '13:00'
+    AND j.eid = 54;
+
+    ASSERT (present = 0), 'Test 29 Failure: Employee 54 should have left meeting 2-1';
+    RAISE NOTICE 'Test 29 Success: Employee 54 successfully left Meeting 2-1 from 12:00 to 13:00'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc30() AS $$
+DECLARE
+approver_id_first_hour INTEGER;
+approver_id_second_hour INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 30 - approve_meeting routine:';
+    CALL approve_meeting(2,1, CURRENT_DATE + 1, TIME '12:00', TIME '14:00', 24); -- ID 24 is a Mananger in Department 2
+
+    SELECT m.approver_eid INTO approver_id_first_hour
+    FROM Meetings m
+    WHERE m.floor_no = 2
+    AND m.room = 1
+    AND m.meeting_date = CURRENT_DATE + 1
+    AND m.start_time = TIME '12:00';
+
+    SELECT m.approver_eid INTO approver_id_second_hour
+    FROM Meetings m
+    WHERE m.floor_no = 2
+    AND m.room = 1
+    AND m.meeting_date = CURRENT_DATE + 1
+    AND m.start_time = TIME '13:00';
+
+    ASSERT
+    (approver_id_first_hour IS NOT NULL AND approver_id_first_hour = 24 AND
+    approver_id_second_hour IS NOT NULL AND approver_id_second_hour = 24),
+    'Test 30 Failure: Meeting was not approved';
+    RAISE NOTICE 'Test 30 Success: Employee 24 successfully approveed Meeting 2-1 from 12:00 to 14:00'; 
+END
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE PROCEDURE tc31() AS $$
+DECLARE
+num_approved INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 31 - Constraint 20 Only managers can approve a booking:';
+    
+    CALL approve_meeting(3, 1, CURRENT_DATE + 2, TIME '12:00', TIME '14:00', 46); -- 46 is Junior in Dept 3
+    
+    SELECT COUNT(*) INTO num_approved
+    FROM Meetings m
+    WHERE m.floor_no = 3
+    AND m.room = 1
+    AND m.meeting_date = CURRENT_DATE + 1
+    AND m.start_time >= TIME '12:00'
+    AND m.start_time < TIME '14:00'
+    AND m.approver_eid IS NOT NULL; 
+
+    ASSERT (num_approved = 0), 'Test 31 Failure: Employee 46 approved meeting 3-1 12:00 to 14:00 despite being a junior';
+    EXCEPTION
+        WHEN sqlstate 'NOMGR' THEN 
+            RAISE NOTICE 'Test 31 Success: Employee 46 could not approve a meeting as they are not a Manager'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc32() AS $$
+DECLARE num_approved INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 32 - Constraint 21 Only managers in the same department as the meeting room can approve the meeting';
+    CALL approve_meeting(3, 1, CURRENT_DATE + 2, TIME '12:00', TIME '14:00', 27); -- Manager dept 2
+    SELECT COUNT(*) INTO num_approved
+    FROM Meetings m
+    WHERE m.floor = 3
+    AND m.room_no = 1
+    AND m.meeting_date = CURRENT_DATE + 2
+    AND approver_eid IS NOT NULL
+    AND (m.start_time = TIME '12:00' OR m.start_time = TIME '13:00');
+    ASSERT (num_approved = 0), 'Test 32 Failure: Manager 27 from department 2 was able to approve a meeting in Meeting Room 3-1 from department 3';
+    EXCEPTION 
+        WHEN sqlstate 'DIFFD' THEN
+        RAISE NOTICE 'Test 32 Success: Employee 27 could not approve a meeting as they are not in the same department'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc33() AS $$
+DECLARE
+    approve_id INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 33 - Constraint 22 A booked meeting is approved at most once:';
+    CALL approve_meeting(2,1, CURRENT_DATE + 1, TIME '12:00', TIME '14:00', 27); -- ID 27 is a Manager in Department 2
+    SELECT m.approver_eid INTO approve_id
+    FROM Meetings m
+    WHERE m.floor_no = 2
+    AND m.room = 1
+    AND m.meeting_date = CURRENT_DATE + 1
+    AND m.start_time = TIME '12:00';
+
+    ASSERT (approve_id = 27), 'Test 33 Failure: Employee 27 was able to approve a meeting that was already approved';
+    EXCEPTION 
+        WHEN sqlstate '2APPR' THEN
+        RAISE NOTICE 'Test 33 Success: Employee 27 was unable to approve Meeting 2-1 from 12:00 to 14:00 as it is already approved'; 
+END
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE PROCEDURE tc34() AS $$
+DECLARE 
+    is_approved BOOLEAN;
+BEGIN
+    RAISE NOTICE 'Test 34 - Constraint 27 Manager can only approve future booking';
+    CALL approve_meeting(5, 1, CURRENT_DATE - 1, TIME '12:00', TIME '13:00', 15); -- Manager dept 5
+    
+    SELECT m.approver_eid IS NOT NULL INTO is_approved
+    FROM Meetings m
+    WHERE m.floor = 5
+    AND m.room_no = 1
+    AND m.meeting_date = CURRENT_DATE - 1
+    AND m.start_time = TIME '12:00';
+    ASSERT (is_approved IS FALSE), 'Test 34 Failure: Manager 15 was able to approve a past meeting';
+    
+    EXCEPTION 
+        WHEN sqlstate 'OAFMT' THEN
+            RAISE NOTICE 'Test 34 Success: Manager 15 was not able to approve a past meeting';  
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc35() AS $$
+DECLARE
+    meeting_exists INTEGER;
+    participant_exists INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 35 - A rejected meeting should be immediately deleted:';
+    CALL join_meeting(10, 1, CURRENT_DATE + 5, TIME '14:00', TIME '16:00', 99); -- 99 is joining just to test the deletion
+    CALL reject_meeting(10, 1, CURRENT_DATE + 5, TIME '14:00', TIME '16:00', 60); -- 60 is a manager in department 10
+
+    SELECT COUNT(*) INTO meeting_exists
+    FROM Meetings m 
+    WHERE m.floor_no = 10
+    AND m.room = 1
+    AND m.meeting_date = CURRENT_DATE + 5
+    AND m.start_time >= TIME '14:00'
+    AND m.start_time < TIME '16:00';
+
+    SELECT COUNT(*) INTO participant_exists
+    FROM Joins j
+    WHERE j.floor_no = 10
+    AND j.room = 1
+    AND j.meeting_date = CURRENT_DATE + 5
+    AND j.start_time >= TIME '14:00' 
+    AND j.start_time < TIME '16:00';
+
+
+    -- Positive testing
+    ASSERT (meeting_exists = 0 AND participant_exists = 0), 'Test 35 Failure: The meeting was not deleted OR the participant is still in the meeting';
+    RAISE NOTICE 'Test 35 Success: Employee 60 rejected Meeting at 10-1, causing it and all its participants to be deleted'; 
+    
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc_1() AS $$
+BEGIN
+    RAISE NOTICE 'Test 1 - :';
+    -- Positive testing
+    ASSERT <statement>, 'Test 1 Failure';
+    RAISE NOTICE 'Test 1 Success: Description'; 
+    -- Negative testing
+    ASSERT (num_approved = 0), 'Test 1 Failed:'
+    EXCEPTION 
+        WHEN sqlstate 'CODE' THEN
+        RAISE NOTICE 'Test 1 Success: Description';  
+END
+$$ LANGUAGE plpgsql;
+
+-- 25 join
+-- 26 join max capacity
+-- 27 join cannot join twice
+-- 28 join cannot join past meeting
+-- 29 leave
+-- 30 approve
+-- 31 approve must be manager constraint 20
+-- 32 approve must be same department constraint 21
+-- 33 approve at most once constraint 22
+-- 34 approve must be future booking constraint 27
+-- 35 reject meeting is immediately deleted
+
+-- 36 unbook after approve
+-- 37 join after approve
+-- 38 leave after approve no fever no resign
+-- 39 leave can leave after approval if resigned
+-- 
+
+
+
+-- TESTS TO TEST
+-- employees in a meeting that was unbooked are removed
+-- if a meeting that was approved is unbook, remove the approval
+-- 
+
+
+
+
+
 
 -- REMOVE EMPLOYEE
 -- CALL remove_employee(100, CURRENT_DATE);
