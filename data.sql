@@ -468,7 +468,13 @@ BEGIN
     CALL tc38();
     CALL tc39();
     CALL tc40();
-
+    CALL tc41();
+    CALL tc42();
+    CALL tc43();
+    CALL tc44();
+    CALL tc45();
+    CALL tc46();
+    CALL tc47();
     -- Search room ()
     -- Book room ()
     -- Unbook room ()
@@ -1032,7 +1038,14 @@ $$ LANGUAGE plpgsql
 
 CREATE OR REPLACE PROCEDURE health_func() AS $$
 BEGIN
-    RAISE NOTICE 'HEALTH FUNCTIONALITY TESTS';
+    RAISE NOTICE 'HEALTH FUNCTIONALITY TESTS
+    ';
+    CALL tc42();
+    CALL tc43();
+    CALL tc44();
+    CALL tc45();
+    CALL tc46();
+    CALL tc47();
 END
 $$ LANGUAGE plpgsql;
 
@@ -1044,21 +1057,19 @@ BEGIN
     RAISE NOTICE 'Test 42 - declare_health routine:';
 
     CALL declare_health(1, CURRENT_DATE, 37.3); -- Employee 1 has no fever today
-    CALL declare_health(23, CURRENT_DATE, 37.6); -- Employee 95 has a fever today
+    CALL declare_health(23, CURRENT_DATE, 37.6); -- Employee 23 has a fever today
 
-    SELECT hd.fever INTO has_fever_1;
+    SELECT hd.fever INTO has_fever_1
     FROM Health_Declaration hd
     WHERE hd.eid = 1
-    AND hd.eid = CURRENT_DATE;
+    AND hd.hd_date = CURRENT_DATE;
 
-    SELECT hd.fever INTO has_fever_23;
+    SELECT hd.fever INTO has_fever_23
     FROM Health_Declaration hd
     WHERE hd.eid = 23
-    AND hd.eid = CURRENT_DATE;
+    AND hd.hd_date = CURRENT_DATE;
 
-    ASSERT (has_fever_1 IS NOT NULL AND has_fever_1 IS FALSE
-    AND has_fever_23 IS NOT NULL AND has_fever_23 IS TRUE
-    ), 'Test 42 Failure: Employees 1 and 23 were unable to declare their temperatures';
+    ASSERT (has_fever_1 IS NOT NULL AND has_fever_23 IS NOT NULL), 'Test 42 Failure: Employees 1 and 23 were unable to declare their temperatures';
     RAISE NOTICE 'Test 42 Success: Employee 1 declared 37.3 degrees today and Employee 23 declared 37.6 degrees (fever) today'; 
     END
 $$ LANGUAGE plpgsql;
@@ -1107,27 +1118,99 @@ END
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE PROCEDURE tc45() AS $$
+DECLARE
+    join_count INTEGER;
 BEGIN
     RAISE NOTICE 'Test 45 - Constraint 19 Employee having a fever cannot join a booked meeting:';
 
-    
+    CALL join_meeting(10, 1, CURRENT_DATE + 3, TIME '14:00', TIME '16:00', 23); -- Employee 23 has a fever
 
-    -- negative testing
-    ASSERT (num_approved = 0), 'Test 45 Failed:'
+    SELECT COUNT(*) INTO join_count
+    FROM Joins j
+    WHERE j.floor_no = 10
+    AND j.room = 1
+    AND j.meeting_date = CURRENT_DATE + 3
+    AND j.start_time >= TIME '14:00'
+    AND j.start_time < TIME '16:00'
+    AND j.eid = 23;
+
+    ASSERT (join_count = 0), 'Test 45 Failed: Employee 23 had a fever but could still join Meeting 10-1 on CURRENT_DATE + 3'
     EXCEPTION
-        WHEN sqlstate 'code' THEN
-        RAISE NOTICE 'Test 45 Success: Description';  
+        WHEN sqlstate 'FVRNJ' THEN
+        RAISE NOTICE 'Test 45 Success: Employee 23 with a fever is unable to join Meeting 10-1';  
 END
 $$ LANGUAGE plpgsql;
 
 
 CREATE OR REPLACE PROCEDURE tc46() AS $$
+DECLARE 
+    employee1_hasFever BOOLEAN;
+    employee23_hasFever BOOLEAN;
 BEGIN
-    RAISE NOTICE 'Test 46'
+    RAISE NOTICE 'Test 46 - Constraint 31 A health declaration with temperature greater than 37.5 is considered a fever:'
+
+    SELECT hd.fever INTO employee1_hasFever;
+    FROM Health_Declaration hd
+    WHERE hd.eid = 1
+    AND hd.hd_date = CURRENT_DATE;
+
+    SELECT hd.fever INTO employee23_hasFever;
+    FROM Health_Declaration hd
+    WHERE hd.eid = 23
+    AND hd.hd_date = CURRENT_DATE;
+
+    ASSERT (employee1_hasFever IS FALSE AND employee23_hasFever IS TRUE
+    ), 'Test 46 Failure: Employee 1 or employee 23 has wrong fever status';
+    RAISE NOTICE 'Test 46 Success: Employee 1 declared 37.3 degrees today, thus has no fever.
+        Employee 23 declared 37.6 degrees, thus has fever'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc47() AS $$
+BEGIN
+    CALL tc47_1();
+    CALL tc47_2();
+END
+$$ LANGUAGE plpgsql;
 
 
+CREATE OR REPLACE PROCEDURE tc47_1() AS $$
+DECLARE
+    declare_count INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 47.1 - Constraint 32 Declare Temperature must be between 34 and 43 degrees (Below 34):';
 
-    
+    CALL declare_health(69, CURRENT_DATE, 33.9);
+
+    SELECT COUNT(*) INTO declare_count
+    FROM Health_Declaration hd
+    WHERE hd.hd_date = CURRENT_DATE
+    AND hd.eid = 69; 
+
+    ASSERT (declare_count = 0), 'Test 47.1 Failed: Employee 69 was able to declare a temperature of 33.9'
+    EXCEPTION
+        WHEN sqlstate '23514' THEN
+        RAISE NOTICE 'Test 47.1 Success: Employee 69 was unable to declare a temperature of 33.9 (Hypothermia)';  
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc47_2() AS $$
+DECLARE
+    declare_count INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 47.2 - Constraint 32 Declare Temperature must be between 34 and 43 degrees (Above 43):';
+
+    CALL declare_health(69, CURRENT_DATE, 43.1);
+
+    SELECT COUNT(*) INTO declare_count
+    FROM Health_Declaration hd
+    WHERE hd.hd_date = CURRENT_DATE
+    AND hd.eid = 69; 
+
+    ASSERT (declare_count = 0), 'Test 47.2 Failed: Employee 69 was able to declare a temperature of 43.1'
+    EXCEPTION
+        WHEN sqlstate '23514' THEN
+        RAISE NOTICE 'Test 47.2 Success: Employee 69 was unable to declare a temperature of 43.1 (Hyperthermia)';  
 END
 $$ LANGUAGE plpgsql;
 
@@ -1136,7 +1219,9 @@ $$ LANGUAGE plpgsql;
 -- 44. fever cannot book room (Constraint 16)
 -- 45. fever cannot join a booked meeting (Constraint 19)
 -- 46. temperature greater than 37.5 is fever (Constraint 31)
--- declare temperature must be between 34 and 43 degrees (Constraint 32)
+-- 47.1. declare temperature must be between 34 and 43 degrees (Constraint 32)
+-- 47.2. declare temperature must be between 34 and 43 degrees (Constraint 32)
+
 
 -- contact_tracing routine should return table of close contact
 -- fever should NOT leave past meetings
