@@ -1,4 +1,4 @@
--- Basic
+ n- Basic
 
 CREATE OR REPLACE PROCEDURE clear_serial()
 AS $$
@@ -119,7 +119,6 @@ CREATE OR REPLACE PROCEDURE remove_employee
         WHERE m.booker_eid = employee_id
         AND ((m.meeting_date = CURRENT_DATE AND m.start_time > CURRENT_TIME) OR (m.meeting_date > CURRENT_DATE));
 
-
         UPDATE Meetings m2
         SET m2.approver_eid = NULL
         WHERE m2.approver_eid = employee_id
@@ -131,6 +130,12 @@ CREATE OR REPLACE PROCEDURE remove_employee
         FROM Joins j
         WHERE j.eid = employee_id
         AND ((j.meeting_date = CURRENT_DATE AND j.start_time > CURRENT_TIME) OR (j.meeting_date > CURRENT_DATE));
+
+        -- Delete all future change_capacities initiated by the employee that is resigning
+        DELETE
+        FROM Updates u
+        WHERE u.approver_eid = emplotee_id
+        AND ((u.meeting_date = CURRENT_DATE AND u.start_time > CURRENT_TIME) OR (u.meeting_date > CURRENT_DATE));
 
     END
     $$ LANGUAGE plpgsql;
@@ -229,12 +234,12 @@ CREATE OR REPLACE PROCEDURE unbook_room
                 message:= 'Error: Only the booker of the meeting is allowed to unbook the room';
         END IF;
 
-        DELETE FROM Joins j
-        WHERE j.room = room_number
-        AND j.floor_no = floor_number
-        AND j.meeting_date = meeting_date
-        AND j.start_time >= start_hour
-        AND j.start_time < end_hour;
+        -- DELETE FROM Joins j
+        -- WHERE j.room = room_number
+        -- AND j.floor_no = floor_number
+        -- AND j.meeting_date = meeting_date
+        -- AND j.start_time >= start_hour
+        -- AND j.start_time < end_hour;
 
         DELETE FROM Meetings m
         WHERE m.floor_no = floor_number 
@@ -376,7 +381,7 @@ BEGIN
         -- 3. Find all employees in the same approved meeting room from the past 3 days
         -- Return all the employees that were in close contact
         RETURN QUERY
-        WITH past_3D_meeting_rooms AS ( -- meetings from past 3 days that i was in
+        WITH past_3D_meeting_rooms AS ( -- APPROVED meetings from past 3 days that i was in
             SELECT j.room, j.floor_no, j.start_time, j.meeting_date
             FROM Joins j JOIN Meetings m
             ON (j.room = m.room
@@ -394,7 +399,7 @@ BEGIN
         ) 
         SELECT * FROM close_contact_employees;
 
-        WITH past_3D_meeting_rooms AS ( -- meetings from past 3 days that i was in
+        WITH past_3D_meeting_rooms AS ( -- APPROVED meetings from past 3 days that i was in
             SELECT j.room, j.floor_no, j.start_time, j.meeting_date
             FROM Joins j JOIN Meetings m
             ON (j.room = m.room
@@ -456,7 +461,8 @@ RETURN QUERY
     )
     SELECT dc.eid AS employee_id, (num_days - dc.declare_count)::INTEGER AS number_of_days
     FROM declaration_count dc
-    WHERE num_days - dc.declare_count > 0;
+    WHERE num_days - dc.declare_count > 0
+    ORDER BY num_days DESC;
 END
 $$ LANGUAGE plpgsql;
 

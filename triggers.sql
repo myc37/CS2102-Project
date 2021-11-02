@@ -121,12 +121,16 @@ BEGIN
     WHERE e.eid = NEW.booker_eid INTO resigned;
 
     IF fever IS TRUE THEN
-        RAISE NOTICE 'Error: Employees that have a fever are not permitted to book a room.';
+        RAISE EXCEPTION USING
+            errcode='BNFNR',
+            message='Error: Employees that have a fever are not permitted to book a room.';
         RETURN NULL;
 	END IF;
 
     IF resigned IS TRUE THEN
-        RAISE NOTICE 'Error: Employees that have resigned are not permitted to book a room.';
+        RAISE EXCEPTION USING
+            errcode='BNFNR',
+            message='Error: Employees that have a resigned are not permitted to book a room.';
         RETURN NULL;
 	END IF;
 
@@ -279,15 +283,28 @@ DECLARE
 	resigned DATE;
 	has_fever BOOLEAN;
     approver_id INTEGER;
+    is_in_past BOOLEAN;
 BEGIN
 	SELECT e.resigned_date INTO resigned FROM Employees e WHERE e.eid = OLD.eid;
+
 	SELECT hd.fever INTO has_fever FROM Health_Declaration hd WHERE hd.hd_date = OLD.meeting_date AND eid = OLD.eid;
+
     SELECT m.approver_eid INTO approver_id FROM Meetings m WHERE m.room = OLD.room 
     AND m.floor_no = OLD.floor_no 
     AND m.meeting_date = OLD.meeting_date 
     AND m.start_time = OLD.start_time;
+
+    SELECT COUNT(*) > 0 INTO is_in_past
+    FROM Meetings m 
+    WHERE m.room = OLD.room
+    AND m.floor_no = OLD.floor_no
+    AND m.meeting_date = OLD.meeting_date
+    AND m.start_time = OLD.start_time
+    AND (m.meeting_date < CURRENT_DATE OR
+    m.meeting_date = CURRENT_DATE AND m.start_time < CURRENT_TIME);
+
 	
-    IF (has_fever IS TRUE OR resigned IS NOT NULL OR approver_id IS NULL) THEN
+    IF ((has_fever IS TRUE OR resigned IS NOT NULL OR approver_id IS NULL) AND is_in_past IS FALSE) THEN
 		RETURN OLD;
 	ELSE
         RAISE EXCEPTION USING
@@ -456,3 +473,17 @@ CREATE TRIGGER contact_trace_on_fever
 AFTER INSERT ON Health_Declaration
 FOR EACH ROW WHEN (NEW.fever IS TRUE) EXECUTE FUNCTION contact_trace_on_fever();
 
+-- can declare health for today only: not for old dates or future dates
+
+CREATE OR REPLACE FUNCTION no_future_hd() RETURNS trigger AS $$
+BEGIN
+    RAISE EXCEPTION USING
+        errcode='NOFHD',
+        message='Error: Can only make a health declaration for the current date';
+END
+$$ LANGUAGE plpgsql
+
+CREATE TRIGGER no_future_hd
+BEFORE INSERT ON Health_Declaration
+FOR EACH ROW WHEN (NEW.hd_date > CURRENT_DATE)
+EXECUTE FUNCTION no_future_hd()

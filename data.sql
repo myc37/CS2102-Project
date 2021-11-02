@@ -2,14 +2,24 @@
 
 CREATE OR REPLACE PROCEDURE test_all() AS $$
 BEGIN
+    CALL reset_db();
     CALL basic_func();
     CALL core_func();
+    CALL health_func();
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE reset_db() AS $$
+BEGIN
+    ALTER TABLE Joins DISABLE TRIGGER valid_leave_meeting; 
+    CALL delete_all();
+    CALL clear_serial();
+    ALTER TABLE Joins ENABLE TRIGGER valid_leave_meeting;
 END
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE PROCEDURE basic_func() AS $$
 BEGIN
-    CALL tc0();
     RAISE NOTICE 'BASIC FUNCTIONALITY TESTS
     ';
     CALL tc1();
@@ -25,15 +35,6 @@ BEGIN
     CALL tc11();
     CALL tc12();
     CALL tc13();
-END
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE PROCEDURE tc0() AS $$
-BEGIN
-    ALTER TABLE Joins DISABLE TRIGGER valid_leave_meeting; 
-    CALL delete_all();
-    CALL clear_serial();
-    ALTER TABLE Joins ENABLE TRIGGER valid_leave_meeting;
 END
 $$ LANGUAGE plpgsql;
 
@@ -307,7 +308,7 @@ BEGIN
     CALL remove_employee(101, CURRENT_DATE);
     SELECT resigned_date INTO employee_resigned_date FROM Employees WHERE eid = 101; 
     IF employee_resigned_date IS NOT NULL THEN
-        RAISE NOTICE 'Test 8 Success: Remove Employee is Functional';
+        RAISE NOTICE 'Test 8 Success: Employee 101 has resigned';
     ELSE
         RAISE NOTICE 'Test 8 Failure';
     END IF;
@@ -466,6 +467,7 @@ BEGIN
     CALL tc37();
     CALL tc38();
     CALL tc39();
+    CALL tc40();
 
     -- Search room ()
     -- Book room ()
@@ -674,7 +676,7 @@ CREATE OR REPLACE PROCEDURE tc26() AS $$
 DECLARE
     is_present INTEGER;
 BEGIN
-    RAISE NOTICE 'Test 26 - Constraint 36 Employee cannot join a meeting that is already at full capacity';
+    RAISE NOTICE 'Test 26 - Constraint 35 Employee cannot join a meeting that is already at full capacity';
     CALL join_meeting(2, 1, CURRENT_DATE + 1, TIME '12:00', TIME '13:00', 55);
 
     SELECT j.eid INTO is_present
@@ -695,7 +697,7 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE PROCEDURE tc27() AS $$
 DECLARE num_present INTEGER;
 BEGIN
-    RAISE NOTICE 'Test 27 - Constraint 37 Employee cannot join a meeting that they have already joined';
+    RAISE NOTICE 'Test 27 - Constraint 36 Employee cannot join a meeting that they have already joined';
     CALL join_meeting(1, 1, CURRENT_DATE + 1, TIME '12:00', TIME '14:00', 48);
     
     SELECT COUNT(*) INTO num_present
@@ -916,7 +918,7 @@ CREATE OR replace procedure tc37() AS $$
 DECLARE
     num_approved INTEGER;
 BEGIN
-    raise notice 'test 37 - Constraint 34 Resigned employee cannot approve room';
+    raise notice 'Test 37 - Constraint 34 Resigned employee cannot approve room';
     CALL approve_meeting(1, 1, CURRENT_DATE + 1, TIME '12:00', TIME '14:00', 101);
     
     SELECT COUNT(*) INTO num_approved
@@ -981,11 +983,175 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE PROCEDURE tc40() AS $$
+DECLARE 
+    join_count INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 40 - Employees cannot leave a past meeting';
+    CALL leave_meeting(5, 1, CURRENT_DATE - 1, TIME '12:00', TIME '13:00', 38);
+
+    SELECT COUNT(*) INTO join_count
+    FROM Joins
+    WHERE j.floor_no = 5
+    AND j.room = 1
+    AND j.meeting_date = CURRENT_DATE - 1
+    AND j.start_time = TIME '12:00'
+    AND j.eid = 38;
+
+    ASSERT (join_count = 1), 'Test 40 Failure: Employee 38 was able to leave a past meeting at Meeting Room 5-1 on the previous day';
+    EXCEPTION
+        WHEN sqlstate 'CNLVM' THEN
+            RAISE NOTICE 'Test 40 Success: Employee 38 was unable to leave a past meeting at Meeting Room 5-1 on the previous day';
+END
+$$ LANGUAGE plpgsql
+
+CREATE OR REPLACE PROCEDURE tc41() AS $$
+DECLARE 
+    did_book BOOLEAN;
+BEGIN
+    RAISE NOTICE 'Test 41 - Constraint 34 A resigned employee should not be able to book a room';
+    
+    CALL book_room(1, 1, CURRENT_DATE + 7, TIME '08:00', TIME '09:00', 101);
+
+    SELECT (COUNT(*) > 0) INTO did_book
+    FROM Meetings m
+    WHERE m.floor_no = 1
+    AND m.room = 1
+    AND m.meeting_date = CURRENT_DATE + 7
+    AND m.start_time = TIME '08:00'
+    AND m.eid = 101;
+
+    ASSERT (did_book IS FALSE), 'Test 41 Failed: Employee 101 has resigned but is still able to book a meeting at Meeting Room 1-1 one week later';
+    EXCEPTION
+        WHEN sqlstate 'BNFNR' THEN
+            RAISE NOTICE 'Test 41 Success: Employee 101 has resigned and so is not able to book a meeting at Meeting Room 1-1 one week later';
+END
+$$ LANGUAGE plpgsql
+
+-- Health
+
+CREATE OR REPLACE PROCEDURE health_func() AS $$
+BEGIN
+    RAISE NOTICE 'HEALTH FUNCTIONALITY TESTS';
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc42() AS $$
+DECLARE
+    has_fever_1 BOOLEAN;
+    has_fever_23 BOOLEAN;
+BEGIN
+    RAISE NOTICE 'Test 42 - declare_health routine:';
+
+    CALL declare_health(1, CURRENT_DATE, 37.3); -- Employee 1 has no fever today
+    CALL declare_health(23, CURRENT_DATE, 37.6); -- Employee 95 has a fever today
+
+    SELECT hd.fever INTO has_fever_1;
+    FROM Health_Declaration hd
+    WHERE hd.eid = 1
+    AND hd.eid = CURRENT_DATE;
+
+    SELECT hd.fever INTO has_fever_23;
+    FROM Health_Declaration hd
+    WHERE hd.eid = 23
+    AND hd.eid = CURRENT_DATE;
+
+    ASSERT (has_fever_1 IS NOT NULL AND has_fever_1 IS FALSE
+    AND has_fever_23 IS NOT NULL AND has_fever_23 IS TRUE
+    ), 'Test 42 Failure: Employees 1 and 23 were unable to declare their temperatures';
+    RAISE NOTICE 'Test 42 Success: Employee 1 declared 37.3 degrees today and Employee 23 declared 37.6 degrees (fever) today'; 
+    END
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE PROCEDURE tc43() AS $$ 
+DECLARE 
+    declaration_count INTEGER;
+BEGIN
+        RAISE NOTICE 'Test 43 - Can only declare health once a day';
+        CALL declare_health(1, CURRENT_DATE, 37.3);
+        
+        SELECT COUNT(*) INTO declaration_count
+        FROM Health_Declaration
+        WHERE eid = 1
+        AND hd_date = CURRENT_DATE;
+
+        ASSERT declaration_count = 1, 'Test 43 Failure: Employee 1 was able to declare twice in a day';
+        EXCEPTION
+            WHEN sqlstate '23505' THEN
+            RAISE NOTICE 'Test 43 Success: Employee 1 was not able to declare their temperature more than once';
+END
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE PROCEDURE tc44() AS $$
+DECLARE 
+    did_book BOOLEAN;
+BEGIN
+    RAISE NOTICE 'Test 44 - Constraint 16 Employee having a fever cannot book room';
+    CALL book_meeting(10, 1, CURRENT_DATE, TIME '08:00', TIME '09:00', 23); -- Manager dept 10
+    
+    SELECT (COUNT(*) > 0) INTO did_book
+    FROM Meetings m
+    WHERE m.floor_no = 10
+    AND m.room = 1
+    AND m.meeting_date = CURRENT_DATE
+    AND m.start_time = TIME '08:00'
+    AND m.eid = 23;
+
+    ASSERT (did_book IS FALSE), 'Test 44 Failed: Employee 23 is having a fever but is still able to book a meeting at Meeting Room 10-1';
+    EXCEPTION
+        WHEN sqlstate 'BNFNR' THEN
+            RAISE NOTICE 'Test 44 Success: Employee 23 is having a fever and so is not able to book a meeting at Meeting Room 10-1';  
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc45() AS $$
+BEGIN
+    RAISE NOTICE 'Test 45 - Constraint 19 Employee having a fever cannot join a booked meeting:';
+
+    
+
+    -- negative testing
+    ASSERT (num_approved = 0), 'Test 45 Failed:'
+    EXCEPTION
+        WHEN sqlstate 'code' THEN
+        RAISE NOTICE 'Test 45 Success: Description';  
+END
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE PROCEDURE tc46() AS $$
+BEGIN
+    RAISE NOTICE 'Test 46'
+
+
+
+    
+END
+$$ LANGUAGE plpgsql;
+
+-- 42. declare_health routine
+-- 43. can only declare health once a day (Constraint 28) enforced by PK
+-- 44. fever cannot book room (Constraint 16)
+-- 45. fever cannot join a booked meeting (Constraint 19)
+-- 46. temperature greater than 37.5 is fever (Constraint 31)
+-- declare temperature must be between 34 and 43 degrees (Constraint 32)
+
+-- contact_tracing routine should return table of close contact
+-- fever should NOT leave past meetings
+-- fever should leave future meetings (ALL future meetings, even if > 7 days) (Constraint 37)
+-- fever should unbook future meetings if fever person is booker, regardless if approved or not (Constraint 38)
+-- close contact should leave next 7 days of meetings
+-- close contact should NOT leave meeting + 8 days from today
+
+
+
 
 CREATE OR REPLACE PROCEDURE tc1() AS $$
 BEGIN
     RAISE NOTICE 'Test 1 -:';
- -- positive testing
+    -- positive testing
     ASSERT <statement>, 'Test 1 Failure';
     RAISE NOTICE 'Test 1 Success: description'; 
     -- negative testing
@@ -995,13 +1161,6 @@ BEGIN
         RAISE NOTICE 'Test 1 Success: Description';  
 END
 $$ LANGUAGE plpgsql;
-
-
--- 36 unbook after approve
--- 37 join after approve
--- 38 cannot leave after a meeting is approved unless they have resigned
--- 39 leave can leave after approval if resigned
--- 40 a resigned employee cannot book or approve meetings
 
 
 
