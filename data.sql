@@ -6,6 +6,7 @@ BEGIN
     CALL basic_func();
     CALL core_func();
     CALL health_func();
+    CALL admin_func();
 END
 $$ LANGUAGE plpgsql;
 
@@ -1423,6 +1424,7 @@ CREATE OR REPLACE PROCEDURE tc48_8() AS $$
 DECLARE 
     e30_meetings_after_seven_days INTEGER;
 BEGIN
+ 
     RAISE NOTICE 'Test 48.8 - Employee 30 should not have their future bookings after 7 days deleted';
 
     SELECT COUNT(*) INTO e30_meetings_after_seven_days 
@@ -1432,6 +1434,59 @@ BEGIN
     
     ASSERT (e30_meetings_after_seven_days != 0), 'Test 48.8 Failure: Employee 30 had their meetings after seven days unbooked';
     RAISE NOTICE 'Test 48.8 Success: Employee 30 did not have their meetings unbooked after +7 days'; 
+END
+$$ LANGUAGE plpgsql;
+
+-- Admin
+CREATE OR REPLACE PROCEDURE admin_func() AS $$
+BEGIN
+    RAISE NOTICE 'ADMIN FUNCTIONALITY TESTS
+    ';
+    CALL tc49();
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc49() AS $$
+BEGIN
+    CALL tc49_1();
+    CALL tc49_2();
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc49_1() AS $$
+DECLARE non_compliance_count INTEGER;
+BEGIN
+    -- Currently on 1, 23, 38 has declared temperature on CURRENT_DATE, 2 is resigned
+    -- Should have 96 entries in non_compliance for CURRENT_DATE
+    RAISE NOTICE 'Test 49.1 - Non Compliance Functionality for Current Date:';
+    -- positive testing
+    SELECT COUNT(*) INTO non_compliance_count FROM non_compliance(CURRENT_DATE, CURRENT_DATE);
+    ASSERT (non_compliance_count = 96), format('Test 49.1 Failure: Only %s employees were flagged for non-compliance on current date when it should have been 96', non_compliance_count);
+    RAISE NOTICE 'Test 49.1 Success: One Day Non Compliance Successful and 96 employees were flagged for non-compliance'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc49_2() AS $$
+
+DECLARE e23_compliance_count INTEGER;
+
+DECLARE e91_compliance_count INTEGER;
+BEGIN
+    -- Set-up for Non Compliance Testing
+    ALTER TABLE Health_Declaration DISABLE TRIGGER no_future_hd;
+    CALL declare_health(1, CURRENT_DATE + 1, 35.2);
+    CALL declare_health(1, CURRENT_DATE + 2, 36.6);
+    CALL declare_health(1, CURRENT_DATE + 3, 35.6);
+    CALL declare_health(23, CURRENT_DATE + 1, 35.6);
+    CALL declare_health(23, CURRENT_DATE + 2, 35.6);
+    ALTER TABLE Health_Declaration ENABLE TRIGGER no_future_hd;
+    RAISE NOTICE 'Test 49.2 - Non Compliance Functionality for Multiple Dates';   
+    SELECT number_of_days INTO e23_compliance_count FROM non_compliance(CURRENT_DATE, CURRENT_DATE + 3) WHERE employee_id = 23;
+    SELECT number_of_days INTO e91_compliance_count FROM non_compliance(CURRENT_DATE, CURRENT_DATE + 3) WHERE employee_id = 91;
+    ASSERT ('1' NOT IN (SELECT employee_id FROM non_compliance(CURRENT_DATE, CURRENT_DATE + 3))), 'Test 49.2 Failure: Employee 1 has an entry in table when it should not';
+    ASSERT (e23_compliance_count = 1), format('Test 49.2 Failure: Non Compliance Count for Employee %s should have been %s but it is %s', 23, 1, e23_compliance_count);
+    ASSERT (e91_compliance_count = 4), format('Test 49.2 Failure: Non Compliance Count for Employee %s should have been %s but it is %s', 91,4 ,e91_compliance_count);
+    RAISE NOTICE 'Test 49.2 Success: Non Compliance Successful and all employees have correct non compliance count'; 
 END
 $$ LANGUAGE plpgsql;
 
