@@ -54,7 +54,7 @@ END
 $$ LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE TRIGGER booker_ISA
+CREATE TRIGGER booker_ISA
 BEFORE INSERT ON Booker
 FOR EACH ROW EXECUTE FUNCTION booker_not_junior();
 
@@ -77,7 +77,7 @@ END
 $$ LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE TRIGGER senior_ISA
+CREATE TRIGGER senior_ISA
 BEFORE INSERT ON Senior 
 FOR EACH ROW EXECUTE FUNCTION senior_not_manager();
 
@@ -100,7 +100,7 @@ END
 $$ LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE TRIGGER manager_ISA
+CREATE TRIGGER manager_ISA
 BEFORE INSERT ON Manager
 FOR EACH ROW EXECUTE FUNCTION manager_not_senior();
 
@@ -139,7 +139,7 @@ END
 $$ LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE TRIGGER booker_nofever_noresign
+CREATE TRIGGER booker_nofever_noresign
 BEFORE
 INSERT ON Meetings
 FOR EACH ROW EXECUTE FUNCTION booker_nofever_noresign();
@@ -166,7 +166,7 @@ END
 $$ LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE TRIGGER approver_noresign
+CREATE TRIGGER approver_noresign
 BEFORE
 UPDATE ON Meetings
 FOR EACH ROW EXECUTE FUNCTION approver_noresign();
@@ -174,17 +174,21 @@ FOR EACH ROW EXECUTE FUNCTION approver_noresign();
 --fever today, but booked meeting in one month's time? still can't join?
  --- CONSTRAINT 19
 --
-CREATE OR REPLACE OR REPLACE FUNCTION reject_fever_join() RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION reject_fever_join() RETURNS TRIGGER AS $$
 DECLARE
     hasFever BOOLEAN;
 BEGIN
-    SELECT fever INTO hasFever
-    FROM Health_Declaration
-    WHERE eid = NEW.eid
-    AND hd_date = CURRENT_DATE;
 
-    IF (hasFever) THEN
-        RAISE NOTICE 'Error: employee has a fever';
+    RAISE NOTICE 'peepee boi';
+    SELECT fever INTO hasFever
+    FROM Health_Declaration hd
+    WHERE hd.eid = NEW.eid
+    AND hd.hd_date = CURRENT_DATE;
+
+    IF (hasFever IS TRUE) THEN
+        RAISE EXCEPTION USING
+            errcode='FVRNJ',
+            message='Error: Employee has a fever and is thus not allowed to join any meetings';
         RETURN NULL;
     ELSE
         RETURN NEW;
@@ -193,9 +197,8 @@ END;
 $$ LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE TRIGGER fever_cannot_join
-BEFORE
-INSERT ON Joins
+CREATE TRIGGER fever_cannot_join
+BEFORE INSERT ON Joins
 FOR EACH ROW EXECUTE FUNCTION reject_fever_join();
 
 --- CONSTRAINT 21
@@ -233,7 +236,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE TRIGGER approve_same_dept
+CREATE TRIGGER approve_same_dept
 BEFORE
 UPDATE ON Meetings
 FOR EACH ROW EXECUTE FUNCTION reject_approval_diff_dept();
@@ -250,7 +253,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE TRIGGER approve_once_only
+CREATE TRIGGER approve_once_only
 BEFORE
 UPDATE ON Meetings
 FOR EACH ROW WHEN (OLD.approver_eid IS NOT NULL) EXECUTE FUNCTION stop_second_approval();
@@ -456,7 +459,7 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE TRIGGER only_approve_future_meetings
+CREATE TRIGGER only_approve_future_meetings
 BEFORE
 UPDATE ON Meetings
 FOR EACH ROW WHEN (OLD.meeting_date < CURRENT_DATE OR (OLD.meeting_date = CURRENT_DATE AND OLD.start_time < CURRENT_TIME)) EXECUTE FUNCTION check_approve_meeting_date();

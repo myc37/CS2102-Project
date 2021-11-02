@@ -469,12 +469,6 @@ BEGIN
     CALL tc39();
     CALL tc40();
     CALL tc41();
-    CALL tc42();
-    CALL tc43();
-    CALL tc44();
-    CALL tc45();
-    CALL tc46();
-    CALL tc47();
     -- Search room ()
     -- Book room ()
     -- Unbook room ()
@@ -982,7 +976,7 @@ BEGIN
     AND j.eid = 51;
 
     -- negative testing
-    ASSERT (join_count = 2), 'Test 39 Failed: Employee 23 was able to leave an approved meeting with no valid reason');
+    ASSERT (join_count = 2), 'Test 39 Failed: Employee 23 was able to leave an approved meeting with no valid reason';
     EXCEPTION
         WHEN sqlstate 'CNLVM' THEN
         RAISE NOTICE 'Test 39 Success: Employee 23 was unable to leave an approved meeting 2-1 as he has no valid reason';  
@@ -1009,7 +1003,7 @@ BEGIN
         WHEN sqlstate 'CNLVM' THEN
             RAISE NOTICE 'Test 40 Success: Employee 38 was unable to leave a past meeting at Meeting Room 5-1 on the previous day';
 END
-$$ LANGUAGE plpgsql
+$$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE PROCEDURE tc41() AS $$
 DECLARE 
@@ -1032,7 +1026,7 @@ BEGIN
         WHEN sqlstate 'BNFNR' THEN
             RAISE NOTICE 'Test 41 Success: Employee 101 has resigned and so is not able to book a meeting at Meeting Room 1-1 one week later';
 END
-$$ LANGUAGE plpgsql
+$$ LANGUAGE plpgsql;
 
 -- Health
 
@@ -1100,7 +1094,7 @@ DECLARE
     did_book BOOLEAN;
 BEGIN
     RAISE NOTICE 'Test 44 - Constraint 16 Employee having a fever cannot book room';
-    CALL book_meeting(10, 1, CURRENT_DATE, TIME '08:00', TIME '09:00', 23); -- Manager dept 10
+    CALL book_room(10, 1, CURRENT_DATE, TIME '08:00', TIME '09:00', 23); -- Manager dept 10
     
     SELECT (COUNT(*) > 0) INTO did_book
     FROM Meetings m
@@ -1134,7 +1128,7 @@ BEGIN
     AND j.start_time < TIME '16:00'
     AND j.eid = 23;
 
-    ASSERT (join_count = 0), 'Test 45 Failed: Employee 23 had a fever but could still join Meeting 10-1 on CURRENT_DATE + 3'
+    ASSERT (join_count = 0), 'Test 45 Failed: Employee 23 had a fever but could still join Meeting 10-1 on CURRENT_DATE + 3';
     EXCEPTION
         WHEN sqlstate 'FVRNJ' THEN
         RAISE NOTICE 'Test 45 Success: Employee 23 with a fever is unable to join Meeting 10-1';  
@@ -1147,22 +1141,21 @@ DECLARE
     employee1_hasFever BOOLEAN;
     employee23_hasFever BOOLEAN;
 BEGIN
-    RAISE NOTICE 'Test 46 - Constraint 31 A health declaration with temperature greater than 37.5 is considered a fever:'
+    RAISE NOTICE 'Test 46 - Constraint 31 A health declaration with temperature greater than 37.5 is considered a fever:';
 
-    SELECT hd.fever INTO employee1_hasFever;
+    SELECT hd.fever INTO employee1_hasFever
     FROM Health_Declaration hd
     WHERE hd.eid = 1
     AND hd.hd_date = CURRENT_DATE;
 
-    SELECT hd.fever INTO employee23_hasFever;
+    SELECT hd.fever INTO employee23_hasFever
     FROM Health_Declaration hd
     WHERE hd.eid = 23
     AND hd.hd_date = CURRENT_DATE;
 
     ASSERT (employee1_hasFever IS FALSE AND employee23_hasFever IS TRUE
     ), 'Test 46 Failure: Employee 1 or employee 23 has wrong fever status';
-    RAISE NOTICE 'Test 46 Success: Employee 1 declared 37.3 degrees today, thus has no fever.
-        Employee 23 declared 37.6 degrees, thus has fever'; 
+    RAISE NOTICE 'Test 46 Success: Employee 1 declared 37.3 degrees today, thus has no fever. Employee 23 declared 37.6 degrees, thus has fever'; 
 END
 $$ LANGUAGE plpgsql;
 
@@ -1187,7 +1180,7 @@ BEGIN
     WHERE hd.hd_date = CURRENT_DATE
     AND hd.eid = 69; 
 
-    ASSERT (declare_count = 0), 'Test 47.1 Failed: Employee 69 was able to declare a temperature of 33.9'
+    ASSERT (declare_count = 0), 'Test 47.1 Failed: Employee 69 was able to declare a temperature of 33.9';
     EXCEPTION
         WHEN sqlstate '23514' THEN
         RAISE NOTICE 'Test 47.1 Success: Employee 69 was unable to declare a temperature of 33.9 (Hypothermia)';  
@@ -1207,12 +1200,14 @@ BEGIN
     WHERE hd.hd_date = CURRENT_DATE
     AND hd.eid = 69; 
 
-    ASSERT (declare_count = 0), 'Test 47.2 Failed: Employee 69 was able to declare a temperature of 43.1'
+    ASSERT (declare_count = 0), 'Test 47.2 Failed: Employee 69 was able to declare a temperature of 43.1';
     EXCEPTION
         WHEN sqlstate '23514' THEN
         RAISE NOTICE 'Test 47.2 Success: Employee 69 was unable to declare a temperature of 43.1 (Hyperthermia)';  
 END
 $$ LANGUAGE plpgsql;
+
+
 
 -- 42. declare_health routine
 -- 43. can only declare health once a day (Constraint 28) enforced by PK
@@ -1223,7 +1218,7 @@ $$ LANGUAGE plpgsql;
 -- 47.2. declare temperature must be between 34 and 43 degrees (Constraint 32)
 
 
--- contact_tracing routine should return table of close contact
+-- 48. contact_tracing routine should return table of close contact
 -- fever should NOT leave past meetings
 -- fever should leave future meetings (ALL future meetings, even if > 7 days) (Constraint 37)
 -- fever should unbook future meetings if fever person is booker, regardless if approved or not (Constraint 38)
@@ -1233,19 +1228,19 @@ $$ LANGUAGE plpgsql;
 
 
 
-CREATE OR REPLACE PROCEDURE tc1() AS $$
-BEGIN
-    RAISE NOTICE 'Test 1 -:';
-    -- positive testing
-    ASSERT <statement>, 'Test 1 Failure';
-    RAISE NOTICE 'Test 1 Success: description'; 
-    -- negative testing
-    ASSERT (num_approved = 0), 'Test 1 Failed:'
-    EXCEPTION
-        WHEN sqlstate 'code' THEN
-        RAISE NOTICE 'Test 1 Success: Description';  
-END
-$$ LANGUAGE plpgsql;
+-- CREATE OR REPLACE PROCEDURE tc1() AS $$
+-- BEGIN
+--     RAISE NOTICE 'Test 1 -:';
+--     -- positive testing
+--     ASSERT <statement>, 'Test 1 Failure';
+--     RAISE NOTICE 'Test 1 Success: description'; 
+--     -- negative testing
+--     ASSERT (num_approved = 0), 'Test 1 Failed:'
+--     EXCEPTION
+--         WHEN sqlstate 'code' THEN
+--         RAISE NOTICE 'Test 1 Success: Description';  
+-- END
+-- $$ LANGUAGE plpgsql;
 
 
 
@@ -1259,129 +1254,6 @@ $$ LANGUAGE plpgsql;
 
 
 
--- REMOVE EMPLOYEE
--- CALL remove_employee(100, CURRENT_DATE);
-
--- ADD PHONE NUMBER
--- (Employee_ID, Number, Type)
---Success
-CALL add_phone_number(1, 91234567 , 'Mobile');
-CALL add_phone_number(1, 61234567 , 'Home');
--- --Fail (Ensure only one phone number of each type)
--- CALL add_phone_number(1, 61234567 , 'Home')
-
--- INSERT ROOMS
--- Success
--- (Room, Floor, Name, Capacity, Department ID, Manager ID)
-CALL add_room(1, 1, 'Room 1-1', 5, 1, 2);
-CALL add_room(1, 2, 'Room 1-2', 5, 1, 10);
-CALL add_room(2, 1, 'Room 2-1', 5, 2, 75);
-CALL add_room(3, 1, 'Room 3-1', 5, 3, 66);
-CALL add_room(4, 1, 'Room 4-1', 5, 4, 71);
-CALL add_room(5, 1, 'Room 5-1', 5, 5, 43);
-CALL add_room(6, 1, 'Room 6-1', 5, 6, 58);
-CALL add_room(7, 1, 'Room 7-1', 5, 7, 82);
-CALL add_room(8, 1, 'Room 8-1', 5, 8, 39);
-CALL add_room(9, 1, 'Room 9-1', 5, 9, 78);
-CALL add_room(10, 1, 'Room 10-1', 5, 10, 79);
-CALL add_room(10, 2, 'Room 10-2', 5, 10, 87);
-CALL add_room(11, 1, 'Room 11-1', 6, 10, 87);
--- -- Fail (Non Manager)
--- CALL add_room(6, 2, 'Room 6-2', 5, 6, 100); --junior
--- CALL add_room(7, 2, 'Room 7-2', 5, 7, 99); --senior
--- CALL add_room(4, 2, 'Room 4-2', 5, 4, 98); --junior
--- -- Fail (Diff Dept)
--- CALL add_room(3, 1, 'Room 3-1', 5, 3, 2); --dept 1
--- CALL add_room(4, 2, 'Room 4-2', 5, 4, 10); --dept 1
--- CALL add_room(5, 1, 'Room 5-1', 5, 5, 75); --dept 2
-
--- BOOK ROOM
--- (Floor, Room, Date, Start Time, End Time, EID)
-CALL book_room(1, 1, CURRENT_DATE, TIME '14:00', TIME '16:00', 48); -- Senior Dept 1
-CALL book_room(1, 2, CURRENT_DATE, TIME '18:00', TIME '20:00', 79);
-
--- Invalid start/end time
---CALL book_room(1, 1, CURRENT_DATE, TIME '16:00', TIME '14:00', 48); -- Senior Dept 1
-
--- UPDATE CAPACITY
--- (Floor, Room, Date, Capacity, EID)
--- Success
-CALL change_capacity(1, 1, CURRENT_DATE, 8, 2);
--- -- Fail (Not Manager)
--- CALL change_capacity(1, 1, CURRENT_DATE, 8, 3);
--- -- Fail (Wrong Department)
--- CALL change_capacity(1, 1, CURRENT_DATE, 8, 39);
-
--- DECLARE HEALTH
--- FIRST TEST (TESTING REMOVED FROM MEETINGS, )
-CALL book_room(1, 2, CURRENT_DATE,  '18:00',  '20:00', 1);
-CALL join_meeting(1, 2, CURRENT_DATE, '18:00', '20:00', 2);
-CALL join_meeting(1, 2, CURRENT_DATE, '18:00', '20:00', 3);
-CALL join_meeting(1, 2, CURRENT_DATE, '18:00', '20:00', 4);
-CALL join_meeting(1, 2, CURRENT_DATE, '18:00', '20:00', 5);
-CALL declare_health(2, CURRENT_DATE, 37.6); -- ONLY FEVER PERSON SHOULD BE REMOVED
-CALL declare_health(1, CURRENT_DATE, 37.6); -- ENTIRE MEETING SHOULD BE CANCELLED
-DELETE FROM Health_Declaration;
-
--- SECOND TEST (TESTING REMOVE CLOSE CONTACT FROM MEETINGS FOR NEXT 7 DAYS)
-DELETE FROM Health_Declaration;
-DELETE FROM Meetings;
-CALL book_room(1, 2, CURRENT_DATE, '14:00',  '16:00', 3); -- Meeting 1
-CALL join_meeting(1, 2, CURRENT_DATE,  '14:00',  '16:00', 1);
-CALL join_meeting(1, 2, CURRENT_DATE,  '14:00',  '16:00', 2);
-CALL join_meeting(1, 2, CURRENT_DATE,  '14:00',  '16:00', 4);
-CALL join_meeting(1, 2, CURRENT_DATE,  '14:00',  '16:00', 5);
-CALL approve_meeting(1, 2, CURRENT_DATE,  '14:00',  '16:00', 2); -- 2 is MANAGER of Dept 1
-CALL book_room(2, 1, CURRENT_DATE + 3,  '12:00',  '14:00', 6); -- Meeting 2
-CALL join_meeting(2, 1, CURRENT_DATE + 3,  '12:00',  '14:00', 2);
-CALL join_meeting(2, 1, CURRENT_DATE + 3,  '12:00',  '14:00', 7); 
-CALL join_meeting(2, 1, CURRENT_DATE + 3,  '12:00',  '14:00', 8);
-CALL approve_meeting(2, 1, CURRENT_DATE + 3,  '12:00',  '14:00', 27); -- 27 is MANAGER of Dept 2
-CALL declare_health(1, CURRENT_DATE, 37.6);
--- EID 2, 3, 4, 5 should be close contact
--- Meeting in Room 2-1 should NOT change as it in the past
--- EID 2 Should be removed from Meeting in Room 1-2
-
--- SEARCH ROOM
--- (capacity, date, start_time, end_time)
--- Success
-SELECT * FROM search_room(5, CURRENT_DATE, CURRENT_TIME::TIME, CURRENT_TIME::TIME + interval '1 hour');
-SELECT * FROM search_room(6, CURRENT_DATE, TIME '14:00', TIME '14:00' + interval '2 hours');
-
--- UNBOOK ROOM
--- (Floor, Room, Date, Start Time, End Time, EID)
--- Success
-CALL unbook_room(1, 1, CURRENT_DATE, TIME '14:00', TIME '16:00', 48); -- Senior Dept 1
-CALL unbook_room(1, 2, CURRENT_DATE, TIME '18:00', TIME '20:00', 79);
-
--- LEAVE MEETING
--- (Floor, Room, Date, Start Time, End Time, EID)
--- Success
-CALL leave_meeting(1, 1, CURRENT_DATE, TIME '14:00', TIME '15:00', 55);
-
--- APPROVE MEETING
--- (floor no, room no, meeting date, start time, end time, approver_eid)
--- Success
-CALL approve_meeting(1, 1, CURRENT_DATE, TIME '18:00', TIME '20:00', 2);
--- Fail (No Second Approval)
-CALL approve_meeting(1, 1, CURRENT_DATE, TIME '18:00', TIME '20:00', 2);
--- Fail (Different Department)
-CALL approve_meeting(1, 1, CURRENT_DATE, TIME '18:00', TIME '20:00', 71);
--- Fail (Not A Manager)
-CALL approve_meeting(1, 1, CURRENT_DATE, TIME '18:00', TIME '20:00', 80);
-
--- REJECT MEETING
--- (floor no, room no, meeting_date, start_time, end_time, approver_eid)
--- CALL reject_meeting(1, 1, CURRENT_DATE, TIME '18:00', TIME '20:00', 48);
-
--- DECLARE HEALTH
--- Success
-CALL declare_health(1, CURRENT_DATE, 37.1);
--- Trigger contact tracing
-CALL declare_health(2, CURRENT_DATE, 39.9);
-
--- NON COMPLIANCE
-CALL non_compliance(CURRENT_DATE, CURRENT_DATE + 1);
 
 
 -- MANAGER LIST
@@ -1436,4 +1308,4 @@ CALL non_compliance(CURRENT_DATE, CURRENT_DATE + 1);
 -- 65	8
 -- 12	8
 -- 81	9
--- 68	9
+-- 68	n
