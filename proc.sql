@@ -533,7 +533,9 @@ DECLARE
     dept_id INTEGER;
 BEGIN
     IF (NOT EXISTS (SELECT 1 FROM Manager WHERE eid = manager_id)) THEN
-        RAISE NOTICE 'Error: Employee is not a manager';
+        RAISE EXCEPTION USING
+            errcode='NOMGR',
+            message='Error: Employee is not a manager';
         RETURN;
     END IF;
     SELECT did INTO dept_id FROM Employees WHERE eid = manager_id;

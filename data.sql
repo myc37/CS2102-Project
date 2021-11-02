@@ -1443,6 +1443,9 @@ BEGIN
     RAISE NOTICE 'ADMIN FUNCTIONALITY TESTS
     ';
     CALL tc49();
+    CALL tc50();
+    CALL tc51();
+    CALL tc52();
 END
 $$ LANGUAGE plpgsql;
 
@@ -1487,6 +1490,87 @@ BEGIN
     ASSERT (e23_compliance_count = 1), format('Test 49.2 Failure: Non Compliance Count for Employee %s should have been %s but it is %s', 23, 1, e23_compliance_count);
     ASSERT (e91_compliance_count = 4), format('Test 49.2 Failure: Non Compliance Count for Employee %s should have been %s but it is %s', 91,4 ,e91_compliance_count);
     RAISE NOTICE 'Test 49.2 Success: Non Compliance Successful and all employees have correct non compliance count'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc50() AS $$
+DECLARE
+    e48_current_count INTEGER;
+    e48_future_count INTEGER;
+    e38_past_count INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 50 - View booking report functionality';
+    SELECT COUNT(*) INTO e48_current_count
+    FROM view_booking_report(CURRENT_DATE, 48);
+    SELECT COUNT(*) INTO e48_future_count
+    FROM view_booking_report(CURRENT_DATE + 2, 48);
+    SELECT COUNT(*) INTO e38_past_count 
+    FROM view_booking_report(CURRENT_DATE, 38);
+    ASSERT (e48_current_count = 8), format('Test 50 Failure: Number of booked meetings from CURRENT_DATE for Employee %s should have been %s but it is %s', 48, 8, e48_current_count);
+    ASSERT (e48_future_count = 4), format('Test 50 Failure: Number of booked meetings from CURRENT_DATE + 2 for Employee %s should have been %s but it is %s', 48, 4, e48_future_count);
+    ASSERT (e38_past_count = 0), format('Test 50 Failure: Number of booked meetings from CURRENT_DATE for Employee %s should have been %s but it is %s', 38, 0, e38_past_count);
+    RAISE NOTICE 'Test 50 Success: View booking report successfully shows all booked meetings of Employee from given start date';
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc51() AS $$
+DECLARE
+    e75_current_count INTEGER;
+    e75_future_count INTEGER;
+    e38_past_count INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 51 - View future meeting functionality';
+    SELECT COUNT(*) INTO e75_current_count
+    FROM view_future_meeting(CURRENT_DATE, 75);
+    SELECT COUNT(*) INTO e75_future_count
+    FROM view_future_meeting(CURRENT_DATE + 2, 75);
+    SELECT COUNT(*) INTO e38_past_count 
+    FROM view_future_meeting(CURRENT_DATE, 38);
+    ASSERT (e75_current_count = 2), format('Test 51 Failure: Number of approved future meetings from CURRENT_DATE for Employee %s should have been %s but it is %s', 75, 2, e48_current_count);
+    ASSERT (e75_future_count = 0), format('Test 51 Failure: Number of approved future meetings from CURRENT_DATE + 2 for Employee %s should have been %s but it is %s', 75, 0, e48_future_count);
+    ASSERT (e38_past_count = 0), format('Test 51 Failure: Number of approved future meetings from CURRENT_DATE for Employee %s should have been %s but it is %s', 38, 0, e38_past_count);
+    RAISE NOTICE 'Test 51 Success: View future meeting successfully shows all approved future meetings of Employee from given start date';
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc52() AS $$
+BEGIN
+    CALL tc52_1();
+    CALL tc52_2();
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc52_1() AS $$
+DECLARE
+    e2_current_count INTEGER;
+    e2_future_count INTEGER;
+    e43_past_count INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 52.1 - View manager report functionality';
+    SELECT COUNT(*) INTO e2_current_count
+    FROM view_manager_report(CURRENT_DATE, 2); -- manager dept 1;
+    SELECT COUNT(*) INTO e2_future_count
+    FROM view_manager_report(CURRENT_DATE + 2, 2); -- manager dept 1;
+    SELECT COUNT(*) INTO e43_past_count
+    FROM view_manager_report(CURRENT_DATE, 43); -- manager dept 5
+    ASSERT (e2_current_count = 6), format('Test 52.1 Failure: Number of meetings to approve from CURRENT DATE for Manager %s should be %s but is %s', 2, 6, e2_current_count);
+    ASSERT (e2_future_count = 4), format('Test 52.1 Failure: Number of meetings to approve from CURRENT DATE + 2 for Manager %s should be %s but is %s', 2, 6, e2_future_count);
+    ASSERT (e43_past_count = 0), format('Test 52.1 Failure: Number of meetings to approve from CURRENT DATE for Manager %s should be %s but is %s', 43, 0, e43_past_count);
+    RAISE NOTICE 'Test 52.1 Success: View manager report successfully shows all meetings to approve for a Manager from CURRENT_DATE onwards';
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc52_2() AS $$
+DECLARE
+    appr_count INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 52.2 - Constraint 40 Only a Manager can view manager report';
+    SELECT COUNT(*) INTO appr_count
+    FROM view_manager_report(CURRENT_DATE, 80); -- senior dept 1
+    ASSERT (appr_count = 0), format('Test 52.2 Failure: Number of meetings to approve from CURRENT DATE for Non-managers should be 0 but is %s', appr_count);
+    EXCEPTION 
+        WHEN sqlstate 'NOMGR' THEN
+            RAISE NOTICE 'Test 52.2 Success: Non-manager Employee 80 not able to view manager report';
 END
 $$ LANGUAGE plpgsql;
 
