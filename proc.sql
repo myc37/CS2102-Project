@@ -396,6 +396,7 @@ BEGIN
             SELECT j2.eid as close_contact_eid
             FROM Joins j2
             WHERE (j2.room, j2.floor_no, j2.start_time, j2.meeting_date) in (SELECT * FROM past_3D_meeting_rooms)
+            AND employee_id <> j2.eid
         ) 
         SELECT * FROM close_contact_employees;
 
@@ -414,6 +415,7 @@ BEGIN
             SELECT j2.eid as close_contact_eid
             FROM Joins j2
             WHERE (j2.room, j2.floor_no, j2.start_time, j2.meeting_date) in (SELECT * FROM past_3D_meeting_rooms)
+            AND employee_id <> j2.eid
         ) 
         -- 3.1. Remove these employees who were close contacted from meetings for next 7 days
         DELETE FROM Joins WHERE eid IN (SELECT * FROM close_contact_employees)
@@ -422,6 +424,27 @@ BEGIN
 
         -- 2. Remove this employee from all future meetings
         DELETE FROM Joins WHERE eid = employee_id AND ((meeting_date = CURRENT_DATE AND start_time > CURRENT_TIME) OR (meeting_date > CURRENT_DATE)); 
+
+          WITH past_3D_meeting_rooms AS ( -- APPROVED meetings from past 3 days that i was in
+            SELECT j.room, j.floor_no, j.start_time, j.meeting_date
+            FROM Joins j JOIN Meetings m
+            ON (j.room = m.room
+            AND j.floor_no = m.floor_no
+            AND j.meeting_date = m.meeting_date
+            AND j.start_time = m.start_time)
+            WHERE j.eid = employee_id
+            AND j.meeting_date >= CURRENT_DATE - interval '3 days'
+            AND j.meeting_date <= CURRENT_DATE
+            AND m.approver_eid IS NOT NULL
+        ), close_contact_employees AS (
+            SELECT j2.eid as close_contact_eid
+            FROM Joins j2
+            WHERE (j2.room, j2.floor_no, j2.start_time, j2.meeting_date) in (SELECT * FROM past_3D_meeting_rooms)
+            AND employee_id <> j2.eid
+        ) 
+        -- 0.
+        DELETE FROM Meetings WHERE booker_eid IN (SELECT * FROM close_contact_employees) AND ((meeting_date = CURRENT_DATE AND start_time > CURRENT_TIME) OR (meeting_date > CURRENT_DATE)) AND (meeting_date <= CURRENT_DATE + 7);
+
         -- 1. Cancel all future bookings that this employee has made
         DELETE FROM Meetings WHERE booker_eid = employee_id AND ((meeting_date = CURRENT_DATE AND start_time > CURRENT_TIME) OR (meeting_date > CURRENT_DATE));  
     ELSE 

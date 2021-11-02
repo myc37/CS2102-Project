@@ -73,7 +73,7 @@ CREATE TABLE Meeting_Rooms (
 	PRIMARY KEY (room, floor_no),
 	FOREIGN KEY (did) REFERENCES Departments (did) -- Located In Relation
 );
--- [ ]unresolved: meeting room must be related to at least one update (the initial one presumably) 
+-- [X]unresolved: meeting room must be related to at least one update (the initial one presumably) 
 CREATE TABLE Updates (
 	room integer,
 	floor_no integer,
@@ -84,7 +84,7 @@ CREATE TABLE Updates (
 	FOREIGN KEY (room, floor_no) REFERENCES Meeting_Rooms (room, floor_no),
 	FOREIGN KEY (eid) REFERENCES Manager (eid)
 );
--- [ ]unresolved: session must be related to at least one join
+-- [X]unresolved: session must be related to at least one join
 CREATE TABLE Meetings (
 	room integer,
 	floor_no integer,

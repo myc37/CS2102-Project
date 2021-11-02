@@ -178,8 +178,6 @@ CREATE OR REPLACE FUNCTION reject_fever_join() RETURNS TRIGGER AS $$
 DECLARE
     hasFever BOOLEAN;
 BEGIN
-
-    RAISE NOTICE 'peepee boi';
     SELECT fever INTO hasFever
     FROM Health_Declaration hd
     WHERE hd.eid = NEW.eid

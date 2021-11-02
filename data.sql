@@ -516,16 +516,19 @@ BEGIN
     CALL book_room(10, 1, CURRENT_DATE + 3, TIME '14:00', TIME '16:00', 79); -- Manager Dept 10
     CALL book_room(10, 1, CURRENT_DATE + 4, TIME '14:00', TIME '16:00', 79); -- Manager Dept 10
     CALL book_room(10, 1, CURRENT_DATE + 5, TIME '14:00', TIME '16:00', 79); -- Manager Dept 10
+    CALL book_room(6, 1, CURRENT_DATE + 6, TIME '14:00', TIME '15:00', 6); -- Senior Dept 6
+    CALL book_room(6, 1, CURRENT_DATE + 14, TIME '14:00', TIME '15:00', 6); -- Senior Dept 6
     CALL book_room(7, 1, CURRENT_DATE + 1, TIME '12:00', TIME '13:00', 82); -- Senior Dept 7 (To be deleted)
     -- booking a past meeting
     ALTER TABLE Meetings DISABLE TRIGGER booking_only_future;
     ALTER TABLE Joins DISABLE TRIGGER only_join_future_meetings;
     CALL book_room(5, 1, CURRENT_DATE - 1, TIME '12:00', TIME '13:00', 38); -- Senior dept 5
+    CALL join_meeting(5, 1, CURRENT_DATE - 1, TIME '12:00', TIME '13:00', 30);
     ALTER TABLE Meetings ENABLE TRIGGER booking_only_future;
     ALTER TABLE Joins ENABLE TRIGGER only_join_future_meetings;
     -- booked a past meeting
-    ASSERT ((SELECT COUNT(*) FROM Meetings) = 22), format('Test 16 Failure: There are %s instead of 21 meetings booked', (SELECT COUNT (*) FROM Meetings));
-    RAISE NOTICE 'Test 16 Success: Database populated with 22 (10 x 2 hours + 2 x 1 hour) meetings'; 
+    ASSERT ((SELECT COUNT(*) FROM Meetings) = 24), format('Test 16 Failure: There are %s instead of 24 meetings booked', (SELECT COUNT (*) FROM Meetings));
+    RAISE NOTICE 'Test 16 Success: Database populated with 24 (10 x 2 hours + 4 x 1 hour) meetings'; 
 END
 $$ LANGUAGE plpgsql;
 
@@ -1040,6 +1043,7 @@ BEGIN
     CALL tc45();
     CALL tc46();
     CALL tc47();
+    CALL tc48();
 END
 $$ LANGUAGE plpgsql;
 
@@ -1207,24 +1211,253 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE PROCEDURE tc48() AS $$
+BEGIN
+    CALL tc48_0();
+    CALL tc48_1();
+    CALL tc48_2();
+    CALL tc48_3();
+    CALL tc48_4();
+    CALL tc48_5();
+    CALL tc48_6();
+    CALL tc48_7();
+    CALL tc48_8();
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc48_0() AS $$
+DECLARE
+    scenario_0_0 BOOLEAN;
+    scenario_0_1 BOOLEAN;
+    scenario_1 BOOLEAN;
+    scenario_2 BOOLEAN;
+    scenario_3 BOOLEAN;
+    scenario_4 BOOLEAN;
+    scenario_5 BOOLEAN;
+    scenario_6 BOOLEAN;
+    scenario_7 BOOLEAN;
+    scenario_8 BOOLEAN;
+BEGIN
+    RAISE NOTICE 'Setup 48.0 - Creating scenarios for testing all the cases of contact tracing:';
+
+    -- 0.0 is that employee 38 is in Past Meeting 5, 1, CURRENT_DATE - 1, TIME '12:00', TIME '13:00'
+    SELECT j.eid IS NOT NULL INTO scenario_0_0
+    FROM Joins j WHERE j.floor_no = 5 AND j.room = 1 AND j.meeting_date = CURRENT_DATE - 1 AND j.start_time = '12:00' AND j.eid = 38;
+
+    -- 0.1 is that employee 30 is in Past Meeting 5, 1, CURRENT_DATE - 1, TIME '12:00', TIME '13:00' 
+    SELECT j.eid IS NOT NULL INTO scenario_0_1
+    FROM Joins j WHERE j.floor_no = 5 AND j.room = 1 AND j.meeting_date = CURRENT_DATE - 1 AND j.start_time = '12:00' AND j.eid = 30;
+
+    -- 1. add employee 38 to future meeting more than +7 days BY CALL book_room(6, 1, CURRENT_DATE + 14, TIME '14:00', TIME '15:00', 6); -- Senior Dept 6
+    CALL join_meeting(6, 1, CURRENT_DATE + 14, TIME '14:00', TIME '15:00', 38);
+    SELECT j.eid IS NOT NULL INTO scenario_1
+    FROM Joins j WHERE j.floor_no = 6 AND j.room = 1 AND j.meeting_date = CURRENT_DATE + 14 AND j.start_time = '14:00' AND j.eid = 38;
+
+    -- 2. add employee 38 to future meeting less than +7 days BY CALL book_room(6, 1, CURRENT_DATE + 6, TIME '14:00', TIME '15:00', 6); -- Senior Dept 6
+    CALL join_meeting(6, 1, CURRENT_DATE + 6, TIME '14:00', TIME '15:00', 38);
+    SELECT j.eid IS NOT NULL INTO scenario_2
+    FROM Joins j WHERE j.floor_no = 6 AND j.room = 1 AND j.meeting_date = CURRENT_DATE + 6 AND j.start_time = '14:00' AND j.eid = 38;
+
+    -- 3. make employee 38 book a room in the future
+    CALL book_room(5, 1, CURRENT_DATE + 20, TIME '14:00', TIME '15:00', 38);
+    SELECT m.booker_eid IS NOT NULL AND m.booker_eid = 38 INTO scenario_3
+    FROM Meetings m WHERE m.floor_no = 5 AND m.room = 1 AND m.meeting_date = CURRENT_DATE + 20 AND m.start_time = '14:00';
+
+    -- 4. add employee 30 to future meeting more than +7 days BY CALL book_room(6, 1, CURRENT_DATE + 14, TIME '14:00', TIME '15:00', 6); -- Senior Dept 6 
+    CALL join_meeting(6, 1, CURRENT_DATE + 14, TIME '14:00', TIME '15:00', 30);
+    SELECT j.eid IS NOT NULL INTO scenario_4
+    FROM Joins j WHERE j.floor_no = 6 AND j.room = 1 AND j.meeting_date = CURRENT_DATE + 14 AND j.start_time = '14:00' AND j.eid = 30;
+
+    -- 5. add employee 30 to future meeting less than +7 days BY CALL book_room(6, 1, CURRENT_DATE + 6, TIME '14:00', TIME '15:00', 6); -- Senior Dept 6
+    CALL join_meeting(6, 1, CURRENT_DATE + 6, TIME '14:00', TIME '15:00', 30);
+    SELECT j.eid IS NOT NULL INTO scenario_5
+    FROM Joins j WHERE j.floor_no = 6 AND j.room = 1 AND j.meeting_date = CURRENT_DATE + 6 AND j.start_time = '14:00' AND j.eid = 30;
+
+    -- 6. make employee 30 book a room less than +7 days
+    CALL book_room(6, 1, CURRENT_DATE + 5, TIME '14:00', TIME '15:00', 30);
+    SELECT m.booker_eid IS NOT NULL AND m.booker_eid = 30 INTO scenario_6
+    FROM Meetings m WHERE m.floor_no = 6 AND m.room = 1 AND m.meeting_date = CURRENT_DATE + 5 AND m.start_time = '14:00';
+
+    -- 7. make employee 30 book a room more than +7 days
+    CALL book_room(6, 1, CURRENT_DATE + 8, TIME '14:00', TIME '15:00', 30);
+    SELECT m.booker_eid IS NOT NULL AND m.booker_eid = 30 INTO scenario_7
+    FROM Meetings m WHERE m.floor_no = 6 AND m.room = 1 AND m.meeting_date = CURRENT_DATE + 8 AND m.start_time = '14:00';
+
+    -- 8. approve past meeting 
+    ALTER TABLE Meetings DISABLE TRIGGER only_approve_future_meetings;
+    CALL approve_meeting(5, 1, CURRENT_DATE - 1, TIME '12:00', TIME '13:00', 15); -- 15 is Manager from Department 5
+    ALTER TABLE Meetings ENABLE TRIGGER only_approve_future_meetings;
+
+    SELECT approver_eid IS NOT NULL INTO scenario_8
+    FROM Meetings m WHERE m.floor_no = 5 AND m.room = 1 AND m.meeting_date = CURRENT_DATE - 1 AND m.start_time = '12:00';
+
+    ASSERT (scenario_0_0 IS TRUE), 'Setup 48.0.0.0 Failed: Employee 38 is NOT in Past Meeting 5-1, Current_Date - 1';
+    ASSERT (scenario_0_1 IS TRUE), 'Setup 48.0.0.1 Failed: Employee 30 iS NOT in Past Meeting 5-1, Current_Date - 1';
+    ASSERT (scenario_1 IS TRUE), 'Setup 48.0.1 Failed: Employee 38 is NOT in Future Meeting 6-1, Current_Date + 14';
+    ASSERT (scenario_2 IS TRUE), 'Setup 48.0.2 Failed: Employee 38 is NOT in Future Meeting 6-1, Current_Date + 6';
+    ASSERT (scenario_3 IS TRUE), 'Setup 48.0.3 Failed: Employee 38 did NOT book a Future Meeting 5-1, Current_Date + 20';
+    ASSERT (scenario_4 IS TRUE), 'Setup 48.0.4 Failed: Employee 30 is NOT in Future Meeting 6-1, Current_Date + 14';
+    ASSERT (scenario_5 IS TRUE), 'Setup 48.0.5 Failed: Employee 30 is NOT in Future Meeting 6-1, Current_date + 6';
+    ASSERT (scenario_6 IS TRUE), 'Setup 48.0.6 Failed: Employee 30 did NOT book a Future Meeting 6-1, Current_Date + 6';
+    ASSERT (scenario_7 IS TRUE), 'Setup 48.0.7 Failed: Employee 30 did NOT book a Future Meeting 6-1, Current_Date + 8'; 
+    ASSERT (scenario_8 IS TRUE), 'Setup 48.0.8 Failed: Past meeting has not been approved'; 
+    RAISE NOTICE 'Setup 48.0 Success: Scenarios successfully set up to test contact tracing';
+
+END;
+$$ LANGUAGE plpgsql;
+
+--syntax ok
+CREATE OR REPLACE PROCEDURE tc48_1() AS $$
+DECLARE 
+    num_contacts INTEGER;
+    is_contact_30 BOOLEAN;
+BEGIN
+    RAISE NOTICE 'Test 48.1 - Declaring fever for Employee 38';
+    CALL declare_health(38, CURRENT_DATE, 38.1);
+
+    SELECT COUNT(*) INTO num_contacts
+    FROM (SELECT * FROM contact_tracing(38)) a;
+    
+    is_contact_30 := (30 IN (SELECT close_contact_eid FROM contact_tracing(38)));
+    
+    ASSERT (num_contacts = 1), 'Test 48.1 Failure, Employee 30 is not the only close contact of Employee 38';
+    ASSERT (is_contact_30 IS TRUE), 'Test 48.1 Failure, Employee 30 is not a close contact of Employee 38';
+    RAISE NOTICE 'Test 48.1 Success, Employee 30 is the only close contact of Employee 38';
+END
+$$ LANGUAGE plpgsql;
+
+--syntax ok
+CREATE OR REPLACE PROCEDURE tc48_2() AS $$
+DECLARE 
+    person_count INTEGER; 
+BEGIN
+    RAISE NOTICE 'Test 48.2 Employee 38 and 30 should still be in past meeting';
+    
+    SELECT COUNT(*) INTO person_count
+    FROM Joins
+    WHERE meeting_date = CURRENT_DATE - 1
+    AND start_time = (TIME '12:00')
+    AND floor_no = 5
+    AND room = 1
+    AND (eid = 30 OR eid = 38);    
+
+    ASSERT (person_count = 2), 'Test Failure: Employee 38 and 30 should still be in past meeting after contact tracing';
+    RAISE NOTICE 'Test 48.2 Success: Both employee 38 and 30 are still in past meeting after contact tracing';
+END
+$$ LANGUAGE plpgsql;
+
+--syntax ok
+CREATE OR REPLACE PROCEDURE tc48_3() AS $$
+DECLARE future_meeting_count INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 48.3 - Constraint 37 Employee with fever should leave all future meetings:';
+    SELECT COUNT(*) INTO future_meeting_count FROM Joins 
+    WHERE ((meeting_date = CURRENT_DATE AND start_time > CURRENT_TIME) OR (meeting_date > CURRENT_DATE)) 
+    AND eid = 38;
+    ASSERT (future_meeting_count = 0), 'Test 48.3 Failure: Employee is still present in future meetings';
+    RAISE NOTICE 'Test 48.3 Success: Employee 38 has left all future meetings due to a fever'; 
+END
+$$ LANGUAGE plpgsql;
+
+-- fever should unbook future meetings, regardless if approved or not
+--syntax ok
+CREATE OR REPLACE PROCEDURE tc48_4() AS $$
+DECLARE future_booked_rooms INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 48.4 - Constraint 38 Employee with a fever should have all their future meetings unbooked:';
+    SELECT COUNT(*) INTO future_booked_rooms FROM Meetings 
+    WHERE booker_eid = 38 AND ((meeting_date = CURRENT_DATE AND start_time > CURRENT_TIME) OR (meeting_date > CURRENT_DATE)); 
+    ASSERT (future_booked_rooms = 0), 'Test 48.4 Failure: There are still future meetings booked by an employee with fever';
+    RAISE NOTICE 'Test 48.4 Success: Employee 38 has had all their future meetings unbooked due to a fever'; 
+END
+$$ LANGUAGE plpgsql;
+
+-- 48.5 employee 30 should leave future meeting less than +7 days
+--syntax ok
+CREATE OR REPLACE PROCEDURE tc48_5() AS $$
+DECLARE next_seven_days_meetings INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 48.5 - Close Contacts should leave meeting in the next 7 days:';
+    SELECT COUNT(*) INTO next_seven_days_meetings FROM Joins 
+    WHERE eid = 30
+    AND ((meeting_date = CURRENT_DATE AND start_time > CURRENT_TIME) OR meeting_date > CURRENT_DATE)
+    AND meeting_date <= CURRENT_DATE + 7;
+    ASSERT (next_seven_days_meetings = 0), 'Test 48.5 Failure: Employee is still in a meeting in the next 7 days despite being a close contact';
+    RAISE NOTICE 'Test 48.5 Success: Employee 30 has been removed from meetings for the next 7 days'; 
+END
+$$ LANGUAGE plpgsql;
+
+-- 48.6 employee 30 should NOT leave future meeting more than +7 days
+--syntax ok
+CREATE OR REPLACE PROCEDURE tc48_6() AS $$
+DECLARE joined_meetings_after_seven_days INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 48.6 - Close Contacts should not leave meetings happening more than 7 days away';
+    SELECT COUNT(*) INTO joined_meetings_after_seven_days FROM Joins
+    WHERE eid = 30
+    AND room = 1
+    AND floor_no = 6
+    AND meeting_date = CURRENT_DATE + 14
+    AND start_time = TIME '14:00';
+    ASSERT (joined_meetings_after_seven_days = 1), format('Test 48.6 Failure: Employee 30 left meetings happening more than 7 days away. %s',joined_meetings_after_seven_days );
+    RAISE NOTICE 'Test 48.6 Success: Employee 30 has not left meeting happening more than 7 days away'; 
+END
+$$ LANGUAGE plpgsql;
+
+--syntax ok
+CREATE OR REPLACE PROCEDURE tc48_7() AS $$
+DECLARE meetings_in_seven_days INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 48.7 - Meetings booked by close contacts in the next 7 days should be removed';
+    SELECT COUNT(*) INTO meetings_in_seven_days FROM Meetings 
+    WHERE booker_eid = 30
+    AND ((meeting_date = CURRENT_DATE AND start_time > CURRENT_TIME) OR (meeting_date > CURRENT_DATE))
+    AND (meeting_date <= CURRENT_DATE + 7);
+    ASSERT (meetings_in_seven_days = 0), 'Test 48.7 Failure: Close Contact Employee 30 still has meetings booked in the next 7 days';
+    RAISE NOTICE 'Test 48.7 Success: Employee 30 has had all their meetings unbooked for the next 7 days due to close contact'; 
+END
+$$ LANGUAGE plpgsql;
+
+--syntax ok
+CREATE OR REPLACE PROCEDURE tc48_8() AS $$
+DECLARE 
+    e30_meetings_after_seven_days INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 48.8 - Employee 30 should not have their future bookings after 7 days deleted';
+
+    SELECT COUNT(*) INTO e30_meetings_after_seven_days 
+    FROM Meetings
+    WHERE booker_eid = 30
+    AND meeting_date > CURRENT_DATE + 7;
+    
+    ASSERT (e30_meetings_after_seven_days != 0), 'Test 48.8 Failure: Employee 30 had their meetings after seven days unbooked';
+    RAISE NOTICE 'Test 48.8 Success: Employee 30 did not have their meetings unbooked after +7 days'; 
+END
+$$ LANGUAGE plpgsql;
 
 
--- 42. declare_health routine
--- 43. can only declare health once a day (Constraint 28) enforced by PK
--- 44. fever cannot book room (Constraint 16)
--- 45. fever cannot join a booked meeting (Constraint 19)
--- 46. temperature greater than 37.5 is fever (Constraint 31)
--- 47.1. declare temperature must be between 34 and 43 degrees (Constraint 32)
--- 47.2. declare temperature must be between 34 and 43 degrees (Constraint 32)
+-- Past Meeting: 5-1 Current_Date - 1 '12:00' - '13:00'
+-- Book Room: 38 Senior Dept 5
+-- Join Meeting: 30 Senior Dept 6
 
+-- 48.0 setup:
 
--- 48. contact_tracing routine should return table of close contact
--- fever should NOT leave past meetings
--- fever should leave future meetings (ALL future meetings, even if > 7 days) (Constraint 37)
--- fever should unbook future meetings if fever person is booker, regardless if approved or not (Constraint 38)
--- close contact should leave next 7 days of meetings
--- close contact should NOT leave meeting + 8 days from today
+-- 1. add employee 38 to future meeting more than +7 days  CALL book_room(6, 1, CURRENT_DATE + 14, TIME '14:00', TIME '15:00', 6); -- Senior Dept 6
+-- 2. add employee 38 to future meeting less than +7 days  CALL book_room(6, 1, CURRENT_DATE + 6, TIME '14:00', TIME '15:00', 6); -- Senior Dept 6
+-- 3. make employee 38 book a room in the future
+-- 4. add employee 30 to future meeting more than +7 days  CALL book_room(6, 1, CURRENT_DATE + 14, TIME '14:00', TIME '15:00', 6); -- Senior Dept 6 
+-- 5. add employee 30 to future meeting less than +7 days  CALL book_room(6, 1, CURRENT_DATE + 6, TIME '14:00', TIME '15:00', 6); -- Senior Dept 6
+-- 6. make employee 30 book a room less than +7 days
+-- 7. make employee 30 book a room more than +7 days
 
+-- 48.1 declare fever on employee 38. contact_tracing is called on 38 and should return Employee 30
+-- 48.2 employee 38 and 30 should still be in past meeting
+-- 48.3 employee 38 should leave BOTH future meetings
+-- 48.4 employee 38's future booking should be gone
+-- 48.5 employee 30 should leave future meeting less than +7 days
+-- 48.6 employee 30 should NOT leave future meeting more than +7 days
+-- 48.7 employee 30's future booking less than +7 days should be gone
+-- 48.8 employee 30's future booking more than +7 days should still remain
 
 
 
