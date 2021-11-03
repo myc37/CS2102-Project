@@ -144,8 +144,9 @@ CREATE OR REPLACE FUNCTION search_room  -- start/end hour means th
     BEGIN 
     --ERROR: update date might be in the future, so have to max before or equal to current_date
     IF (start_hour > end_hour) THEN 
-        RAISE NOTICE 'Error: start time cannot be later than end time';
-        RETURN;
+        RAISE EXCEPTION USING
+            errcode='SHAEH',
+            message='Error: Start time was after end time';
     END IF;
     RETURN QUERY
        WITH rooms_with_enough_capacity AS (
@@ -197,8 +198,9 @@ CREATE OR REPLACE FUNCTION search_room  -- start/end hour means th
         -- 4. Employee is not resigned (Enforced by trigger)
 
         IF (start_hour > end_hour) THEN
-            RAISE NOTICE 'Error: start time cannot be later than end time';
-            RETURN;
+            RAISE EXCEPTION USING 
+                errcode='SHAEH',
+                message='Error: Start hour is after end hour';
         ELSE 
                 starting_time := start_hour;
             WHILE (start_hour < end_hour) LOOP

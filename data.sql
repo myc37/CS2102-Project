@@ -503,7 +503,7 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE tc16() AS $$
+CREATE OR REPLACE PROCEDURE tc16() AS $$
 BEGIN
     CALL tc16_1();
     CALL tc16_2();
@@ -545,7 +545,7 @@ BEGIN
     CALL book_room(1, 1, CURRENT_DATE + 20, TIME '14:00', TIME '12:00', 48);
     RAISE NOTICE 'Test 16.2 Failure: Room was booked despite start_time being after end_time';
     EXCEPTION
-        WHEN sqlstate = '' THEN
+        WHEN sqlstate 'SHAEH' THEN
         RAISE NOTICE 'Test 16.2 Success: Room was not booked as start_time was after end_time';
 
 END
@@ -1046,7 +1046,8 @@ BEGIN
     ASSERT (did_book IS FALSE), 'Test 41 Failed: Employee 101 has resigned but is still able to book a meeting at Meeting Room 1-1 one week later';
     EXCEPTION
         WHEN sqlstate 'BNFNR' THEN
-            RAISE NOTICE 'Test 41 Success: Employee 101 has resigned and so is not able to book a meeting at Meeting Room 1-1 one week later';
+            RAISE NOTICE 'Test 41 Success: Employee 101 has resigned and so is not able to book a meeting at Meeting Room 1-1 one week later
+            ';
 END
 $$ LANGUAGE plpgsql;
 
@@ -1451,7 +1452,8 @@ BEGIN
     AND meeting_date > CURRENT_DATE + 7;
     
     ASSERT (e30_meetings_after_seven_days != 0), 'Test 48.8 Failure: Employee 30 had their meetings after seven days unbooked';
-    RAISE NOTICE 'Test 48.8 Success: Employee 30 did not have their meetings unbooked after +7 days'; 
+    RAISE NOTICE 'Test 48.8 Success: Employee 30 did not have their meetings unbooked after +7 days
+    '; 
 END
 $$ LANGUAGE plpgsql;
 
@@ -1464,6 +1466,7 @@ BEGIN
     CALL tc50();
     CALL tc51();
     CALL tc52();
+    CALL tc53();
 END
 $$ LANGUAGE plpgsql;
 
@@ -1592,6 +1595,24 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE PROCEDURE tc53() AS $$
+DECLARE
+num_meetings INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 53 - Constraint 41 When a meeting room has its capacity changed, any room booking after the change date with more participants will automatically be removed.';
+    CALL change_capacity(2, 1, CURRENT_DATE, 2, 27);
+
+    SELECT COUNT(*) INTO num_meetings
+    FROM Meetings m
+    WHERE m.floor_no = 2
+    AND m.room = 1
+    AND m.meeting_date = CURRENT_DATE + 1
+    AND m.start_time = TIME '12:00';
+
+    ASSERT (num_meetings = 0), format('Test 53 Failure: Meeting in Room 2-1 should have been cancelled as the participants (3) is greater than the new capacity (2). Meet count %s',num_meetings);
+    RAISE NOTICE 'Test 53 Success: After Room 2-1 capacity was reduced from 5 to 2, the meeting was cancelled as it had 3 participants';
+END
+$$ LANGUAGE plpgsql
 
 -- Past Meeting: 5-1 Current_Date - 1 '12:00' - '13:00'
 -- Book Room: 38 Senior Dept 5

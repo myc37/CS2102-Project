@@ -488,3 +488,27 @@ CREATE TRIGGER no_future_hd
 BEFORE INSERT ON Health_Declaration
 FOR EACH ROW WHEN (NEW.hd_date > CURRENT_DATE)
 EXECUTE FUNCTION no_future_hd()
+
+
+-- Meeting room dynamics
+CREATE OR REPLACE FUNCTION remove_overloaded_room_after_update() RETURNS TRIGGER AS $$
+BEGIN
+    WITH overloaded_rooms AS (
+        SELECT j.floor_no, j.room, j.meeting_date, j.start_time FROM Joins j
+        WHERE j.floor_no = NEW.floor_no 
+        AND j.room = NEW.room
+        AND j.meeting_date > NEW.update_date
+        GROUP BY (j.floor_no, j.room, j.meeting_date, j.start_time)
+        HAVING COUNT(*) > NEW.new_capacity
+    )
+    DELETE FROM Meetings m
+    WHERE (m.floor_no, m.room, m.meeting_date, m.start_time) 
+    IN (SELECT * FROM overloaded_rooms);
+    RETURN NEW;
+END
+$$ LANGUAGE plpgsql;
+
+
+CREATE TRIGGER remove_overloaded_room_after_update
+AFTER INSERT OR UPDATE ON Updates -- NEW (room, floor, meet_date, update_date, new_capacity)
+FOR EACH ROW EXECUTE FUNCTION remove_overloaded_room_after_update();
