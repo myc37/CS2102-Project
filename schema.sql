@@ -58,7 +58,6 @@ CREATE TABLE Health_Declaration (
 	eid integer NOT NULL,
 	hd_date DATE,
 	temp NUMERIC,
-	fever boolean,
 	PRIMARY KEY (eid, hd_date),
 	FOREIGN KEY (eid) REFERENCES Employees (eid),
 	CONSTRAINT valid_temperature CHECK (temp BETWEEN 34 AND 43)

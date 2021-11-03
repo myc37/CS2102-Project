@@ -111,14 +111,14 @@ DECLARE
     fever BOOLEAN;
     resigned BOOLEAN;
 BEGIN
-    SELECT (hd.temp > 37.5)
+    SELECT (hd.temp > 37.5) INTO fever
     FROM Health_Declaration hd
     WHERE hd.eid = NEW.booker_eid
-    AND hd.hd_date = CURRENT_DATE INTO fever;
+    AND hd.hd_date = CURRENT_DATE;
 
-    SELECT e.resigned_date IS NOT NULL
+    SELECT e.resigned_date IS NOT NULL INTO resigned
     FROM Employees e
-    WHERE e.eid = NEW.booker_eid INTO resigned;
+    WHERE e.eid = NEW.booker_eid;
 
     IF fever IS TRUE THEN
         RAISE EXCEPTION USING
@@ -174,10 +174,34 @@ FOR EACH ROW EXECUTE FUNCTION approver_noresign();
 --fever today, but booked meeting in one month's time? still can't join?
  --- CONSTRAINT 19
 --
+CREATE OR REPLACE FUNCTION reject_no_declare_join() RETURNS TRIGGER AS $$
+DECLARE
+    declared BOOLEAN:
+BEGIN
+    SELECT hd.temp IS NOT NULL INTO declared
+    FROM Health_Declaration hd
+    WHERE hd.eid = NEW.eid
+    AND hd.hd_date = CURRENT_DATE;
+ 
+    IF (declared IS FALSE) THEN
+        RAISE EXCEPTION USING
+            errcode='NHDNJ',
+            message='Error: Employee has not declared their temperature and is thus not allowed to join any meetings';
+        RETURN NULL;
+    ELSE
+        RETURN NEW;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER no_declare_cannot_join
+BEFORE INSERT ON Joins
+FOR EACH ROW EXECUTE FUNCTION reject_no_declare_join();
+
 CREATE OR REPLACE FUNCTION reject_fever_join() RETURNS TRIGGER AS $$
 DECLARE
     hasFever BOOLEAN;
-BEGIN
+BEGIN 
     SELECT (hd.temp > 37.5) INTO hasFever
     FROM Health_Declaration hd
     WHERE hd.eid = NEW.eid
@@ -193,7 +217,6 @@ BEGIN
     END IF;
 END;
 $$ LANGUAGE plpgsql;
-
 
 CREATE TRIGGER fever_cannot_join
 BEFORE INSERT ON Joins
@@ -349,22 +372,22 @@ FOR EACH ROW EXECUTE FUNCTION same_manager_change_capacity();
 
 --Constraint 24
 
-CREATE OR REPLACE FUNCTION only_manager_change_capacity() RETURNS TRIGGER AS $$
-BEGIN
-    IF (NEW.eid NOT IN (SELECT eid FROM Manager)) THEN
-        RAISE EXCEPTION USING
-            errcode='OMGRC',
-            message='Error: Non-Managers cannot change room capacity';
-        RETURN NULL;
-    ELSE
-        RETURN NEW;
-    END IF;
-END
-$$ LANGUAGE plpgsql;
+-- CREATE OR REPLACE FUNCTION only_manager_change_capacity() RETURNS TRIGGER AS $$
+-- BEGIN
+--     IF (NEW.eid NOT IN (SELECT eid FROM Manager)) THEN
+--         RAISE EXCEPTION USING
+--             errcode='OMGRC',
+--             message='Error: Non-Managers cannot change room capacity';
+--         RETURN NULL;
+--     ELSE
+--         RETURN NEW;
+--     END IF;
+-- END
+-- $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER only_manager_change_capacity
-BEFORE INSERT OR UPDATE ON Updates
-FOR EACH ROW EXECUTE FUNCTION only_manager_change_capacity();
+-- CREATE TRIGGER only_manager_change_capacity
+-- BEFORE INSERT OR UPDATE ON Updates
+-- FOR EACH ROW EXECUTE FUNCTION only_manager_change_capacity();
 
 
 
@@ -487,7 +510,7 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER no_future_hd
 BEFORE INSERT ON Health_Declaration
 FOR EACH ROW WHEN (NEW.hd_date > CURRENT_DATE)
-EXECUTE FUNCTION no_future_hd()
+EXECUTE FUNCTION no_future_hd();
 
 
 -- Meeting room dynamics
@@ -512,3 +535,74 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER remove_overloaded_room_after_update
 AFTER INSERT OR UPDATE ON Updates -- NEW (room, floor, meet_date, update_date, new_capacity)
 FOR EACH ROW EXECUTE FUNCTION remove_overloaded_room_after_update();
+
+
+
+CREATE OR REPLACE FUNCTION valid_meeting() RETURNS TRIGGER AS $$
+DECLARE 
+    num_blocking_meetings INTEGER;
+BEGIN 
+    SELECT COUNT(*) INTO num_blocking_meetings
+    FROM Meetings m 
+    WHERE m.floor_no =  NEW.floor_no
+    AND m.room = NEW.room
+    AND m.meeting_date = NEW.meeting_date
+    AND m.start_time > NEW.start_time - interval '1 hour'
+    AND m.start_time < NEW.start_time + interval '1 hour';
+    
+    IF (num_blocking_meetings > 0) THEN
+        RAISE EXCEPTION USING
+            errcode='INVMT',
+            message='Error: Cannot book meeting at this time due to clashes';
+        RETURN NULL;
+    ELSE 
+        RETURN NEW;
+    END IF;
+END 
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER valid_meeting
+BEFORE INSERT ON Meetings
+FOR EACH ROW EXECUTE FUNCTION valid_meeting();
+
+
+CREATE OR REPLACE FUNCTION no_declare_cannot_join() RETURNS TRIGGER AS $$
+DECLARE
+    declared_today BOOLEAN;
+BEGIN
+    SELECT INTO declared_today EXISTS (SELECT 1 FROM Health_Declaration hd WHERE hd.eid = NEW.eid AND hd.hd_date = CURRENT_DATE);
+    IF (declared_today IS FALSE) THEN
+        RAISE EXCEPTION USING
+            errcode='NHDNJ',
+            message=format('Error: Employee %s did not declare health today and hence cannot join a meeting', NEW.eid);
+        RETURN NULL;
+    ELSE
+        RETURN NEW;
+    END IF;
+END
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER no_declare_cannot_join
+BEFORE INSERT ON Joins
+FOR EACH ROW EXECUTE FUNCTION no_declare_cannot_join();
+
+
+CREATE OR REPLACE FUNCTION no_declare_cannot_book() RETURNS TRIGGER AS $$
+DECLARE 
+    declared_today BOOLEAN;
+BEGIN
+    SELECT INTO declared_today EXISTS (SELECT 1 FROM Health_Declaration hd WHERE hd.eid = NEW.booker_eid AND hd.hd_date = CURRENT_DATE);
+    IF (declared_today IS FALSE) THEN
+        RAISE EXCEPTION USING
+            errcode='NHDNB',
+            message=format('Error: Employee %s did not declare health today and hence cannot book a meeting', NEW.booker_eid);
+        RETURN NULL;
+    ELSE
+        RETURN NEW;
+    END IF;
+END
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER no_declare_cannot_book
+BEFORE INSERT ON Meetings
+FOR EACH ROW EXECUTE FUNCTION no_declare_cannot_book();

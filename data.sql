@@ -411,7 +411,7 @@ BEGIN
     AND u.update_date = CURRENT_DATE;
     ASSERT (new_cap IS NULL), 'Test 13.2 Failure';
     EXCEPTION 
-        WHEN sqlstate 'OMGRC' THEN
+        WHEN sqlstate '23503' THEN
         RAISE NOTICE 'Test 13.2 Success: Non manager is unable to change the capacity'; 
 END
 $$ LANGUAGE plpgsql;
@@ -512,6 +512,12 @@ $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE PROCEDURE tc16_1() AS $$
 BEGIN
+    CALL declare_health(48, CURRENT_DATE, 36);
+    CALL declare_health(75, CURRENT_DATE, 36);
+    CALL declare_health(36, CURRENT_DATE, 36);
+    CALL declare_health(79, CURRENT_DATE, 36);
+    CALL declare_health(6, CURRENT_DATE, 36);
+    CALL declare_health(82, CURRENT_DATE, 36);
     RAISE NOTICE 'Test 16.1 - book_room routine:';
     CALL book_room(1, 1, CURRENT_DATE + 1, TIME '12:00', TIME '14:00', 48); -- Senior Dept 1
     CALL book_room(1, 1, CURRENT_DATE + 2, TIME '12:00', TIME '14:00', 48); -- Senior Dept 1
@@ -529,8 +535,12 @@ BEGIN
     -- booking a past meeting
     ALTER TABLE Meetings DISABLE TRIGGER booking_only_future;
     ALTER TABLE Joins DISABLE TRIGGER only_join_future_meetings;
+    ALTER TABLE Meetings DISABLE TRIGGER no_declare_cannot_book;
+    ALTER TABLE Joins DISABLE TRIGGER no_declare_cannot_join;
     CALL book_room(5, 1, CURRENT_DATE - 1, TIME '12:00', TIME '13:00', 38); -- Senior dept 5
     CALL join_meeting(5, 1, CURRENT_DATE - 1, TIME '12:00', TIME '13:00', 30);
+    ALTER TABLE Joins ENABLE TRIGGER no_declare_cannot_join;
+    ALTER TABLE Meetings ENABLE TRIGGER no_declare_cannot_book;
     ALTER TABLE Meetings ENABLE TRIGGER booking_only_future;
     ALTER TABLE Joins ENABLE TRIGGER only_join_future_meetings;
     -- booked a past meeting
@@ -570,6 +580,7 @@ $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE PROCEDURE tc18() AS $$
 BEGIN
+    CALL declare_health(32, CURRENT_DATE, 36);
     RAISE NOTICE 'Test 18 - Constraint 13 Junior cannot book a room';
     CALL book_room(1, 1, CURRENT_DATE + 4, TIME '12:00', TIME '14:00', 32); -- Junior Dept 1
     RAISE NOTICE 'Test 18 Failed: Junior could book a room.';
@@ -580,10 +591,21 @@ END
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE PROCEDURE tc19() AS $$
+begin
+    -- Initialization
+    CALL book_room(1, 1, CURRENT_DATE + 1, TIME '14:00', TIME '15:00', 48); 
+    CALL tc19_1();
+    CALL tc19_2();
+    CALL tc19_3();
+end
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc19_1() AS $$
 DECLARE 
     booker_id INTEGER;
-BEGIN
-    RAISE NOTICE 'Test 19 - Constraint 15 Meeting room can only booked by one group for a given date and time';
+BEGIN 
+    RAISE NOTICE 'Test 19.1 - Constraint 15 Meeting room can only booked by one group for a given date and time';
+    ALTER TABLE Meetings DISABLE 
     CALL book_room(1, 1, CURRENT_DATE + 1, TIME '12:00', TIME '13:00', 91); -- Senior Dept 1
     SELECT m.booker_eid INTO booker_id
     FROM Meetings m
@@ -591,10 +613,39 @@ BEGIN
     AND m.floor_no = 1
     AND m.start_time = TIME '12:00'
     AND m.meeting_date = CURRENT_DATE + 1;
-    ASSERT (booker_id = 48), 'Test 19 Failure: Booker ID should not have changed from 48';
+    ASSERT (booker_id = 48), 'Test 19.1 Failure: Booker ID should not have changed from 48';
     EXCEPTION 
-        WHEN sqlstate '23505' THEN
-        RAISE NOTICE 'Test 19 Success: Room 1-1 cannot be booked by employee 91 as it has already been booked by employee 48';
+        WHEN sqlstate 'INVMT' THEN
+        RAISE NOTICE 'Test 19.1 Success: Room 1-1 cannot be booked by employee 91 as it has already been booked by employee 48';
+        ALTER TABLE Meetings ENABLE TRIGGER no_declare_cannot_book;
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc19_2() AS $$
+DECLARE 
+    meeting_exists BOOLEAN;
+BEGIN
+    RAISE NOTICE 'Test 19.2 - Constraint 15 Checking if meeting can be booked in the middle of another meeting:';
+    CALL book_room(1, 1, CURRENT_DATE + 1, TIME '12:01', TIME '14:01', 48); 
+    SELECT EXISTS INTO meeting_exists (SELECT 1 FROM Meetings WHERE room = 1 AND floor_no = 1 AND meeting_date = CURRENT_DATE + 1 AND start_time = TIME '12:01' AND booker_eid = 48);
+    ASSERT (meeting_exists IS FALSE), 'Test 19.2 Failure: Meeting should not have been booked in the middle of another meeting';
+    EXCEPTION 
+        WHEN sqlstate 'INVMT' THEN
+        RAISE NOTICE 'Test 19.2 Success: Room 1-1 cannot be booked as it already has a meeting ongoing during that time';
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc19_3() AS $$
+DECLARE 
+    meeting_exists BOOLEAN;
+BEGIN
+    RAISE NOTICE 'Test 19.3 - Constraint 15 Checking if meeting can be booked in the middle of another meeting:';
+    CALL book_room(1, 1, CURRENT_DATE + 1, TIME '10:00', TIME '12:00', 48); 
+    SELECT EXISTS INTO meeting_exists (SELECT 1 FROM Meetings WHERE room = 1 AND floor_no = 1 AND meeting_date = CURRENT_DATE + 1 AND start_time = TIME '10:00' AND booker_eid = 48);
+    ASSERT (meeting_exists IS TRUE), 'Test 19.3 Success: Meeting was booked as there are no clashes';
+    EXCEPTION 
+        WHEN sqlstate 'INVMT' THEN
+        RAISE NOTICE 'Test 19.3 Failure: Meeting could not be booked despite having no clashes';
 END
 $$ LANGUAGE plpgsql;
 
@@ -668,6 +719,10 @@ DECLARE
     half_meeting INTEGER;
     full_meeting INTEGER;
 BEGIN
+    CALL declare_health(51, CURRENT_DATE, 36);
+    CALL declare_health(52, CURRENT_DATE, 36);
+    CALL declare_health(53, CURRENT_DATE, 36);
+    CALL declare_health(54, CURRENT_DATE, 36);
     RAISE NOTICE 'Test 25 - join_meeting routine';
     CALL join_meeting(2,1, CURRENT_DATE + 1, TIME '12:00', TIME '14:00', 51);
     CALL join_meeting(2,1, CURRENT_DATE + 1, TIME '12:00', TIME '14:00', 52);
@@ -740,6 +795,7 @@ CREATE OR REPLACE PROCEDURE tc28() AS $$
 DECLARE 
     num_joined INTEGER;
 BEGIN
+    CALL declare_health(74, CURRENT_DATE, 36);
     RAISE NOTICE 'Test 28 - Constraint 26 Employees can only join future meetings';
     CALL join_meeting(5, 1, CURRENT_DATE - 1, TIME '12:00', TIME '13:00', 74); -- Senior dept 5
     SELECT COUNT(eid) INTO num_joined
@@ -898,6 +954,8 @@ DECLARE
     meeting_exists INTEGER;
     participant_exists INTEGER;
 BEGIN
+    CALL declare_health(99, CURRENT_DATE, 36);
+    CALL declare_health(60, CURRENT_DATE, 36);
     RAISE NOTICE 'Test 35 - A rejected meeting should be immediately deleted:';
     CALL join_meeting(10, 1, CURRENT_DATE + 5, TIME '14:00', TIME '16:00', 99); -- 99 is joining just to test the deletion
     CALL reject_meeting(10, 1, CURRENT_DATE + 5, TIME '14:00', TIME '16:00', 60); -- 60 is a manager in department 10
@@ -1077,12 +1135,12 @@ BEGIN
     CALL declare_health(1, CURRENT_DATE, 37.3); -- Employee 1 has no fever today
     CALL declare_health(23, CURRENT_DATE, 37.6); -- Employee 23 has a fever today
 
-    SELECT hd.fever INTO has_fever_1
+    SELECT hd.temp > 37.5 INTO has_fever_1
     FROM Health_Declaration hd
     WHERE hd.eid = 1
     AND hd.hd_date = CURRENT_DATE;
 
-    SELECT hd.fever INTO has_fever_23
+    SELECT hd.temp > 37.5 INTO has_fever_23
     FROM Health_Declaration hd
     WHERE hd.eid = 23
     AND hd.hd_date = CURRENT_DATE;
@@ -1167,12 +1225,12 @@ DECLARE
 BEGIN
     RAISE NOTICE 'Test 46 - Constraint 31 A health declaration with temperature greater than 37.5 is considered a fever:';
 
-    SELECT hd.fever INTO employee1_hasFever
+    SELECT hd.temp > 37.5 INTO employee1_hasFever
     FROM Health_Declaration hd
     WHERE hd.eid = 1
     AND hd.hd_date = CURRENT_DATE;
 
-    SELECT hd.fever INTO employee23_hasFever
+    SELECT hd.temp > 37.5 INTO employee23_hasFever
     FROM Health_Declaration hd
     WHERE hd.eid = 23
     AND hd.hd_date = CURRENT_DATE;
@@ -1467,6 +1525,8 @@ BEGIN
     CALL tc51();
     CALL tc52();
     CALL tc53();
+    CALL tc54();
+    CALL tc55();
 END
 $$ LANGUAGE plpgsql;
 
@@ -1527,7 +1587,7 @@ BEGIN
     FROM view_booking_report(CURRENT_DATE + 2, 48);
     SELECT COUNT(*) INTO e38_past_count 
     FROM view_booking_report(CURRENT_DATE, 38);
-    ASSERT (e48_current_count = 8), format('Test 50 Failure: Number of booked meetings from CURRENT_DATE for Employee %s should have been %s but it is %s', 48, 8, e48_current_count);
+    ASSERT (e48_current_count = 11), format('Test 50 Failure: Number of booked meetings from CURRENT_DATE for Employee %s should have been %s but it is %s', 48, 11, e48_current_count);
     ASSERT (e48_future_count = 4), format('Test 50 Failure: Number of booked meetings from CURRENT_DATE + 2 for Employee %s should have been %s but it is %s', 48, 4, e48_future_count);
     ASSERT (e38_past_count = 0), format('Test 50 Failure: Number of booked meetings from CURRENT_DATE for Employee %s should have been %s but it is %s', 38, 0, e38_past_count);
     RAISE NOTICE 'Test 50 Success: View booking report successfully shows all booked meetings of Employee from given start date';
@@ -1574,7 +1634,7 @@ BEGIN
     FROM view_manager_report(CURRENT_DATE + 2, 2); -- manager dept 1;
     SELECT COUNT(*) INTO e43_past_count
     FROM view_manager_report(CURRENT_DATE, 43); -- manager dept 5
-    ASSERT (e2_current_count = 6), format('Test 52.1 Failure: Number of meetings to approve from CURRENT DATE for Manager %s should be %s but is %s', 2, 6, e2_current_count);
+    ASSERT (e2_current_count = 9), format('Test 52.1 Failure: Number of meetings to approve from CURRENT DATE for Manager %s should be %s but is %s', 2, 9, e2_current_count);
     ASSERT (e2_future_count = 4), format('Test 52.1 Failure: Number of meetings to approve from CURRENT DATE + 2 for Manager %s should be %s but is %s', 2, 6, e2_future_count);
     ASSERT (e43_past_count = 0), format('Test 52.1 Failure: Number of meetings to approve from CURRENT DATE for Manager %s should be %s but is %s', 43, 0, e43_past_count);
     RAISE NOTICE 'Test 52.1 Success: View manager report successfully shows all meetings to approve for a Manager from CURRENT_DATE onwards';
@@ -1611,6 +1671,49 @@ BEGIN
 
     ASSERT (num_meetings = 0), format('Test 53 Failure: Meeting in Room 2-1 should have been cancelled as the participants (3) is greater than the new capacity (2). Meet count %s',num_meetings);
     RAISE NOTICE 'Test 53 Success: After Room 2-1 capacity was reduced from 5 to 2, the meeting was cancelled as it had 3 participants';
+END
+$$ LANGUAGE plpgsql
+
+-- Additional Triggers
+CREATE OR REPLACE PROCEDURE health_func() AS $$
+BEGIN
+    RAISE NOTICE 'HEALTH FUNCTIONALITY TESTS
+    ';
+    CALL tc42();
+    CALL tc43();
+    CALL tc44();
+    CALL tc45();
+    CALL tc46();
+    CALL tc47();
+    CALL tc48();
+END
+$$ LANGUAGE plpgsql;
+
+
+
+CREATE OR REPLACE tc54() PROCEDURE AS $$
+DECLARE joined_meeting BOOLEAN;
+BEGIN
+    RAISE NOTICE 'Test 54 - no_declare_cannot_join If an employee has not declared health today, they cannot join a meeting';
+    CALL join_meeting(1, 1, CURRENT_DATE + 1, TIME '12:00', '14:00', 19);
+    SELECT INTO joined_meeting EXISTS (SELECT * FROM Joins j WHERE j.room = 1 AND j.floor_no = 1 AND meeting_date = CURRENT_DATE + 1 and start_time = TIME '12:00' AND eid = 19);
+    ASSERT(joined_meeting IS FALSE), 'Test 54 Failure: Employee was able to join meeting despite not having declared health today';
+    EXCEPTION
+        WHEN sqlstate 'NHDNJ' THEN
+            RAISE NOTICE 'Test 54 Success: Employee could not join meeting as they did not declare health';
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE tc55() PROCEDURE AS $$
+DECLARE
+    booked_meeting BOOLEAN;
+BEGIN
+    CALL join_meeting(1, 1, CURRENT_DATE + 1, TIME '12:00', '14:00', 19);
+    SELECT INTO booked_meeting EXISTS (SELECT * FROM Meetings m WHERE m.room = 1 AND j.floor_no = 1 AND meeting_date = CURRENT_DATE + 9 and start_time = TIME '12:00' AND eid = 19);
+    ASSERT (booked_meeting IS FALSE), 'Test 55 Failure: Employee 38 was able to book a meeting in Meeting Room 1-1 on CURRENT_DATE + 1 despite not declaring health';
+    EXCEPTION 
+        WHEN sqlstate 'NHDNB' THEN
+            RAISE NOTICE 'Test 55 Success: Employee 38 could not book a meeting in Meeting Room 1-1 on CURRENT_DATE + 1 as they did not declare health';
 END
 $$ LANGUAGE plpgsql
 

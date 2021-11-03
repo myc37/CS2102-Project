@@ -196,7 +196,6 @@ CREATE OR REPLACE FUNCTION search_room  -- start/end hour means th
         -- 2. Room is available (Enforced by PK being room, floor_no, date, start_time))
         -- 3. Employee is not having a fever (Enforced by trigger)
         -- 4. Employee is not resigned (Enforced by trigger)
-
         IF (start_hour > end_hour) THEN
             RAISE EXCEPTION USING 
                 errcode='SHAEH',
@@ -361,7 +360,7 @@ CREATE OR REPLACE PROCEDURE declare_health
 AS $$
 BEGIN
     --- Constraint 31:
-    INSERT INTO Health_Declaration (eid, hd_date, temp, fever) VALUES (employee_id, declaration_date, temp, temp > 37.5);
+    INSERT INTO Health_Declaration (eid, hd_date, temp) VALUES (employee_id, declaration_date, temp);
 END
 $$ LANGUAGE plpgsql;
 
@@ -371,7 +370,7 @@ RETURNS TABLE (close_contact_eid INTEGER) AS $$
 DECLARE hasFever BOOLEAN;
 BEGIN
     ALTER TABLE Joins DISABLE TRIGGER valid_leave_meeting;
-    SELECT hd.fever INTO hasFever
+    SELECT (hd.temp > 37.5) INTO hasFever
     FROM Health_Declaration hd
     WHERE hd.eid = employee_id AND hd.hd_date = CURRENT_DATE; 
 
