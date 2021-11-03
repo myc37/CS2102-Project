@@ -503,10 +503,16 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 
-
-CREATE OR REPLACE PROCEDURE tc16() AS $$
+CREATE OR REPLACE tc16() AS $$
 BEGIN
-    RAISE NOTICE 'Test 16 - book_room routine:';
+    CALL tc16_1();
+    CALL tc16_2();
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc16_1() AS $$
+BEGIN
+    RAISE NOTICE 'Test 16.1 - book_room routine:';
     CALL book_room(1, 1, CURRENT_DATE + 1, TIME '12:00', TIME '14:00', 48); -- Senior Dept 1
     CALL book_room(1, 1, CURRENT_DATE + 2, TIME '12:00', TIME '14:00', 48); -- Senior Dept 1
     CALL book_room(1, 1, CURRENT_DATE + 3, TIME '12:00', TIME '14:00', 48); -- Senior Dept 1
@@ -528,8 +534,20 @@ BEGIN
     ALTER TABLE Meetings ENABLE TRIGGER booking_only_future;
     ALTER TABLE Joins ENABLE TRIGGER only_join_future_meetings;
     -- booked a past meeting
-    ASSERT ((SELECT COUNT(*) FROM Meetings) = 24), format('Test 16 Failure: There are %s instead of 24 meetings booked', (SELECT COUNT (*) FROM Meetings));
-    RAISE NOTICE 'Test 16 Success: Database populated with 24 (10 x 2 hours + 4 x 1 hour) meetings'; 
+    ASSERT ((SELECT COUNT(*) FROM Meetings) = 24), format('Test 16.1 Failure: There are %s instead of 24 meetings booked', (SELECT COUNT (*) FROM Meetings));
+    RAISE NOTICE 'Test 16.1 Success: Database populated with 24 (10 x 2 hours + 4 x 1 hour) meetings'; 
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc16_2() AS $$
+BEGIN
+    RAISE NOTICE 'Test 16.2 - book_room routine integrity checks (start_date must be before end_date)';
+    CALL book_room(1, 1, CURRENT_DATE + 20, TIME '14:00', TIME '12:00', 48);
+    RAISE NOTICE 'Test 16.2 Failure: Room was booked despite start_time being after end_time';
+    EXCEPTION
+        WHEN sqlstate = '' THEN
+        RAISE NOTICE 'Test 16.2 Success: Room was not booked as start_time was after end_time';
+
 END
 $$ LANGUAGE plpgsql;
 
