@@ -176,7 +176,7 @@ FOR EACH ROW EXECUTE FUNCTION approver_noresign();
 --
 CREATE OR REPLACE FUNCTION reject_no_declare_join() RETURNS TRIGGER AS $$
 DECLARE
-    declared BOOLEAN:
+    declared BOOLEAN;
 BEGIN
     SELECT hd.temp IS NOT NULL INTO declared
     FROM Health_Declaration hd
@@ -606,3 +606,27 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER no_declare_cannot_book
 BEFORE INSERT ON Meetings
 FOR EACH ROW EXECUTE FUNCTION no_declare_cannot_book();
+
+CREATE OR REPLACE FUNCTION no_empty_updates() RETURNS TRIGGER AS $$
+DECLARE 
+    update_count INTEGER;
+BEGIN
+    RAISE NOTICE 'TESTING';
+    SELECT COUNT(*) INTO update_count 
+    FROM Updates u 
+    WHERE u.room = NEW.room 
+    AND u.floor_no = NEW.floor_no;
+    IF (update_count = 1) THEN
+        RAISE EXCEPTION USING
+            errcode='CNTDU', -- can't delete update
+            message=format('Error: Cannot delete Update if this is the only update for this room');
+        RETURN NULL;
+    ELSE
+        RETURN NEW;
+    END IF;
+END
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER no_empty_updates 
+BEFORE DELETE ON Updates
+FOR EACH ROW EXECUTE FUNCTION no_empty_updates();
