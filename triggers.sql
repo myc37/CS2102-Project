@@ -1,7 +1,7 @@
 CREATE OR REPLACE FUNCTION auto_add_booker() RETURNS TRIGGER AS $$
 BEGIN
     INSERT INTO Booker (eid) VALUES (NEW.eid);
-    RETURN;
+    RETURN NEW;
 END
 $$ LANGUAGE plpgsql;
 
@@ -111,7 +111,7 @@ DECLARE
     fever BOOLEAN;
     resigned BOOLEAN;
 BEGIN
-    SELECT hd.fever 
+    SELECT (hd.temp > 37.5)
     FROM Health_Declaration hd
     WHERE hd.eid = NEW.booker_eid
     AND hd.hd_date = CURRENT_DATE INTO fever;
@@ -178,7 +178,7 @@ CREATE OR REPLACE FUNCTION reject_fever_join() RETURNS TRIGGER AS $$
 DECLARE
     hasFever BOOLEAN;
 BEGIN
-    SELECT fever INTO hasFever
+    SELECT (hd.temp > 37.5) INTO hasFever
     FROM Health_Declaration hd
     WHERE hd.eid = NEW.eid
     AND hd.hd_date = CURRENT_DATE;
@@ -288,7 +288,7 @@ DECLARE
 BEGIN
 	SELECT e.resigned_date INTO resigned FROM Employees e WHERE e.eid = OLD.eid;
 
-	SELECT hd.fever INTO has_fever FROM Health_Declaration hd WHERE hd.hd_date = OLD.meeting_date AND eid = OLD.eid;
+	SELECT (hd.temp > 37.5) INTO has_fever FROM Health_Declaration hd WHERE hd.hd_date = OLD.meeting_date AND eid = OLD.eid;
 
     SELECT m.approver_eid INTO approver_id FROM Meetings m WHERE m.room = OLD.room 
     AND m.floor_no = OLD.floor_no 
@@ -472,7 +472,7 @@ $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER contact_trace_on_fever
 AFTER INSERT ON Health_Declaration
-FOR EACH ROW WHEN (NEW.fever IS TRUE) EXECUTE FUNCTION contact_trace_on_fever();
+FOR EACH ROW WHEN (NEW.temp > 37.5) EXECUTE FUNCTION contact_trace_on_fever();
 
 -- can declare health for today only: not for old dates or future dates
 
@@ -482,7 +482,7 @@ BEGIN
         errcode='NOFHD',
         message='Error: Can only make a health declaration for the current date';
 END
-$$ LANGUAGE plpgsql
+$$ LANGUAGE plpgsql;
 
 CREATE TRIGGER no_future_hd
 BEFORE INSERT ON Health_Declaration

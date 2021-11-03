@@ -97,7 +97,7 @@ CREATE TABLE Meetings (
 	FOREIGN KEY (approver_eid) REFERENCES Manager (eid) -- Approves Relation
 );
 
-CREATE OR REPLACE TABLE Joins (
+CREATE TABLE Joins (
 	room integer, 
 	floor_no integer, 
 	meeting_date date, 

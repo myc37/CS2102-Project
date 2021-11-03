@@ -1,5 +1,3 @@
- n- Basic
-
 CREATE OR REPLACE PROCEDURE clear_serial()
 AS $$
 BEGIN
@@ -92,7 +90,6 @@ CREATE OR REPLACE PROCEDURE add_employee
         formatted_name := REPLACE(employee_name, ' ', '_');
         INSERT INTO Employees (did, ename) VALUES (department_id, employee_name) RETURNING eid INTO employee_id;
         UPDATE Employees SET email = CONCAT(formatted_name, '_', employee_id, '@bluewhale.org') WHERE eid = employee_id;
-
         IF kind = 'junior' THEN
             INSERT INTO Junior VALUES (employee_id);
         ELSIF kind = 'senior' THEN
@@ -120,10 +117,9 @@ CREATE OR REPLACE PROCEDURE remove_employee
         AND ((m.meeting_date = CURRENT_DATE AND m.start_time > CURRENT_TIME) OR (m.meeting_date > CURRENT_DATE));
 
         UPDATE Meetings m2
-        SET m2.approver_eid = NULL
+        SET approver_eid = NULL
         WHERE m2.approver_eid = employee_id
         AND ((m2.meeting_date = CURRENT_DATE AND m2.start_time > CURRENT_TIME) OR (m2.meeting_date > CURRENT_DATE));
-
 
         -- WE ARE DIRECTLY DELETING INSTEAD OF CALLING LEAVE MEETING BECAUSE ITS EASIER
         DELETE  
@@ -134,8 +130,8 @@ CREATE OR REPLACE PROCEDURE remove_employee
         -- Delete all future change_capacities initiated by the employee that is resigning
         DELETE
         FROM Updates u
-        WHERE u.approver_eid = emplotee_id
-        AND ((u.meeting_date = CURRENT_DATE AND u.start_time > CURRENT_TIME) OR (u.meeting_date > CURRENT_DATE));
+        WHERE u.eid = employee_id
+        AND u.update_date > CURRENT_DATE;
 
     END
     $$ LANGUAGE plpgsql;
@@ -261,7 +257,7 @@ CREATE OR REPLACE PROCEDURE join_meeting
     SELECT (approver_eid IS NOT NULL) INTO is_approved 
     FROM Meetings m 
     WHERE m.floor_no = floor_number 
-    AND m.room = room_noe
+    AND m.room = room_no
     AND m.meeting_date = meeting_date
     AND m.start_time = start_hour;
 
@@ -296,7 +292,7 @@ BEGIN
     AND j.meeting_date = meet_date
     AND j.start_time >= start_hour
     AND j.start_time < end_hour
-    AND j.eid = employee_id
+    AND j.eid = employee_id;
 END
 $$ LANGUAGE plpgsql;
 
@@ -337,11 +333,11 @@ BEGIN
     -- Employee is in the same department
     SELECT did INTO mgr_dept
     FROM Employees
-    WHERE eid = employee_id
+    WHERE eid = employee_id;
     
     IF (mgr_dept <> rm_dept) THEN 
         RAISE EXCEPTION USING
-            errcode='DIFFD'
+            errcode='DIFFD',
             message='Error: Manager can only approve or reject meetings in the same department';
     END IF;
             

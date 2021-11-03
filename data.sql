@@ -580,7 +580,7 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE PROCEDURE tc_20() AS $$
+CREATE OR REPLACE PROCEDURE tc20() AS $$
 BEGIN
     RAISE NOTICE 'Test 20 - Constraint 26 Employees can only join future meetings'; 
     CALL book_room(5, 1, CURRENT_DATE - 1, TIME '12:00', TIME '13:00', 38); -- Senior dept 5
