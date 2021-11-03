@@ -1516,7 +1516,7 @@ BEGIN
     AND meeting_date > CURRENT_DATE + 7;
     
     ASSERT (e30_meetings_after_seven_days != 0), 'Test 48.8 Failure: Employee 30 had their meetings after seven days unbooked';
-    RAISE NOTICE 'Test 48.8 Success: Employee 30 did not have their meetings unbooked after +7 days
+    RAISE NOTICE 'Test 48.8 Success: Employee 30 did not have their meetings unbooked after 7 days
     '; 
 END
 $$ LANGUAGE plpgsql;
