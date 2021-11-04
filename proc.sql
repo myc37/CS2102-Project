@@ -414,6 +414,8 @@ BEGIN
     IF hasFever IS TRUE THEN
         -- 3. Find all employees in the same approved meeting room from the past 3 days
         -- Return all the employees that were in close contact
+        ALTER TABLE Joins DISABLE TRIGGER protect_joins;
+        ALTER TABLE Meetings DISABLE TRIGGER protect_meetings;
         RETURN QUERY
         WITH past_3D_meeting_rooms AS ( -- APPROVED meetings from past 3 days that i was in
             SELECT j.room, j.floor_no, j.start_time, j.meeting_date
@@ -452,8 +454,6 @@ BEGIN
             AND employee_id <> j2.eid
         ) 
         -- 3.1. Remove these employees who were close contacted from meetings for next 7 days
-        ALTER TABLE Joins DISABLE TRIGGER protect_joins;
-        ALTER TABLE Meetings DISABLE TRIGGER protect_meetings;
         DELETE FROM Joins WHERE eid IN (SELECT * FROM close_contact_employees)
         AND ((meeting_date = CURRENT_DATE AND start_time > CURRENT_TIME) OR (meeting_date > CURRENT_DATE))
         AND meeting_date <= CURRENT_DATE + interval '7 days';
