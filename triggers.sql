@@ -634,13 +634,13 @@ FOR EACH ROW EXECUTE FUNCTION no_empty_updates();
 
 -- block manual changes
 CREATE OR REPLACE FUNCTION block_manual_changes() RETURNS TRIGGER AS $$
-START
+BEGIN
     RAISE EXCEPTION USING
-        errcode="NOMCH",
-        message="Error: Please use the provided routines to make changes to the database"
+        errcode='NOMCH',
+        message='Error: Please use the provided routines to make changes to the database';
     RETURN NULL;
 END
-$$ LANGUAGE plpgsql
+$$ LANGUAGE plpgsql;
 
 CREATE TRIGGER protect_departments
 BEFORE INSERT OR UPDATE OR DELETE ON Departments
