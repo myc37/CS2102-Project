@@ -170,35 +170,8 @@ CREATE TRIGGER approver_noresign
 BEFORE
 UPDATE ON Meetings
 FOR EACH ROW EXECUTE FUNCTION approver_noresign();
-
---fever today, but booked meeting in one month's time? still can't join?
- --- CONSTRAINT 19
---
-CREATE OR REPLACE FUNCTION reject_no_declare_join() RETURNS TRIGGER AS $$
-DECLARE
-    declared BOOLEAN;
-BEGIN
-    SELECT EXISTS INTO declared 
-    (SELECT 1 
-    FROM Health_Declaration hd
-    WHERE hd.eid = NEW.eid
-    AND hd.hd_date = CURRENT_DATE);
  
-    IF (declared IS FALSE) THEN
-        RAISE EXCEPTION USING
-            errcode='NHDNJ',
-            message='Error: Employee has not declared their temperature and is thus not allowed to join any meetings';
-        RETURN NULL;
-    ELSE
-        RETURN NEW;
-    END IF;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER no_declare_cannot_join
-BEFORE INSERT ON Joins
-FOR EACH ROW EXECUTE FUNCTION reject_no_declare_join();
-
+--- CONSTRAINT 19
 CREATE OR REPLACE FUNCTION reject_fever_join() RETURNS TRIGGER AS $$
 DECLARE
     hasFever BOOLEAN;
