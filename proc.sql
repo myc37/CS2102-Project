@@ -340,6 +340,8 @@ CREATE OR REPLACE PROCEDURE approve_meeting (
     IN end_hour TIME,
     IN employee_id INTEGER
 ) AS $$
+DECLARE
+    meeting_exists BOOLEAN;
 BEGIN
     ALTER TABLE Meetings DISABLE TRIGGER protect_meetings;
     UPDATE Meetings m SET approver_eid = employee_id
@@ -411,6 +413,7 @@ RETURNS TABLE (close_contact_eid INTEGER) AS $$
 DECLARE hasFever BOOLEAN;
 BEGIN
     ALTER TABLE Joins DISABLE TRIGGER valid_leave_meeting;
+    ALTER TABLE Joins DISABLE TRIGGER booker_cannot_leave;
     SELECT (hd.temp > 37.5) INTO hasFever
     FROM Health_Declaration hd
     WHERE hd.eid = employee_id AND hd.hd_date = CURRENT_DATE; 
@@ -493,6 +496,7 @@ BEGIN
 		RAISE NOTICE 'Employee does not have a fever';
     END IF;
     ALTER TABLE Joins ENABLE TRIGGER valid_leave_meeting;
+    ALTER TABLE Joins ENABLE TRIGGER booker_cannot_leave;
 END
 $$ LANGUAGE plpgsql;
 

@@ -15,6 +15,7 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE PROCEDURE reset_db() AS $$
 BEGIN
     ALTER TABLE Joins DISABLE TRIGGER valid_leave_meeting; 
+    ALTER TABLE Joins DISABLE TRIGGER booker_cannot_leave; 
     ALTER TABLE Departments DISABLE TRIGGER protect_departments;
     ALTER TABLE Employees DISABLE TRIGGER protect_employees;
     ALTER TABLE Phone_Numbers DISABLE TRIGGER protect_phone_numbers;
@@ -30,6 +31,7 @@ BEGIN
     CALL delete_all();
     CALL clear_serial();
     ALTER TABLE Joins ENABLE TRIGGER valid_leave_meeting;
+    ALTER TABLE Joins ENABLE TRIGGER booker_cannot_leave; 
     ALTER TABLE Departments ENABLE TRIGGER protect_departments;
     ALTER TABLE Employees ENABLE TRIGGER protect_employees;
     ALTER TABLE Phone_Numbers ENABLE TRIGGER protect_phone_numbers;
@@ -1139,7 +1141,7 @@ DECLARE
     join_count INTEGER;
 BEGIN
     RAISE NOTICE 'Test 40 - Employees cannot leave a past meeting';
-    CALL leave_meeting(5, 1, CURRENT_DATE - 1, TIME '12:00', TIME '13:00', 38);
+    CALL leave_meeting(5, 1, CURRENT_DATE - 1, TIME '12:00', TIME '13:00', 30);
 
     SELECT COUNT(*) INTO join_count
     FROM Joins

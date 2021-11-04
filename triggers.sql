@@ -178,10 +178,11 @@ CREATE OR REPLACE FUNCTION reject_no_declare_join() RETURNS TRIGGER AS $$
 DECLARE
     declared BOOLEAN;
 BEGIN
-    SELECT hd.temp IS NOT NULL INTO declared
+    SELECT EXISTS INTO declared 
+    (SELECT 1 
     FROM Health_Declaration hd
     WHERE hd.eid = NEW.eid
-    AND hd.hd_date = CURRENT_DATE;
+    AND hd.hd_date = CURRENT_DATE);
  
     IF (declared IS FALSE) THEN
         RAISE EXCEPTION USING
@@ -244,7 +245,6 @@ BEGIN
             message='Error: Approver is not a manager';
         RETURN NULL;
     END IF;
-
     IF (manager_did <> meeting_did) THEN
         RAISE EXCEPTION USING
             errcode='DIFFD',
@@ -640,12 +640,11 @@ CREATE TRIGGER no_empty_updates
 BEFORE DELETE ON Updates
 FOR EACH ROW EXECUTE FUNCTION no_empty_updates();
 
-
-CREATE OR REPLACE FUNCTION on_booker_leave() RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION booker_cannot_leave() RETURNS TRIGGER AS $$
 DECLARE
     is_booker BOOLEAN;
 BEGIN
-    SELECT (booker_eid = OLD.eid) INTO booker
+    SELECT (OLD.eid = m.booker_eid) INTO is_booker
     FROM Meetings m
     WHERE m.floor_no = OLD.floor_no
     AND m.room = OLD.room
@@ -653,18 +652,19 @@ BEGIN
     AND m.start_time = OLD.start_time;
 
     IF (is_booker IS TRUE) THEN 
-        CALL unbook_room(OLD.floor_no, OLD.room, OLD.meeting_date, OLD.start_time, OLD.start_time)
-    ELSE
+        RAISE EXCEPTION USING
+            errcode='BKRNL',
+            message='Error: Booker cannot leave meeting. Use unbook_room routine instead';
+        RETURN NULL;
+    ELSE 
         RETURN OLD;
     END IF;
-
 END
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER on_booker_leave
+CREATE TRIGGER booker_cannot_leave
 BEFORE DELETE ON Joins
-FOR EACH ROW EXECUTE FUNCTION on_booker_leave();
-
+FOR EACH ROW EXECUTE FUNCTION booker_cannot_leave();
 
 
 -- block manual changes
