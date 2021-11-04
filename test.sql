@@ -7,8 +7,8 @@ BEGIN
     ALTER TABLE Updates ENABLE TRIGGER no_empty_updates;
     CALL basic_func();
     CALL core_func();
-    -- CALL health_func();
-    -- CALL admin_func();
+    CALL health_func();
+    CALL admin_func();
 END
 $$ LANGUAGE plpgsql;
 
@@ -794,10 +794,17 @@ END
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE PROCEDURE tc26() AS $$
+BEGIN
+    CALL tc26_1();
+    CALL tc26_2();
+END
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE PROCEDURE tc26_1() AS $$
 DECLARE
     is_present INTEGER;
 BEGIN
-    RAISE NOTICE 'Test 26 - Constraint 35 Employee cannot join a meeting that is already at full capacity';
+    RAISE NOTICE 'Test 26.1 - Constraint 35 Employee cannot join a meeting that is already at full capacity';
     CALL join_meeting(2, 1, CURRENT_DATE + 1, TIME '12:00', TIME '13:00', 55);
 
     SELECT j.eid INTO is_present
@@ -807,13 +814,33 @@ BEGIN
     AND j.meeting_date = CURRENT_DATE + 1
     AND j.start_time = TIME '12:00';
 
-    ASSERT (is_present IS NULL), 'Test 26 Failure: Employee 55 was able to join a meeting room that is full';
+    ASSERT (is_present IS NULL), 'Test 26.1 Failure: Employee 55 was able to join a meeting room that is full';
     EXCEPTION 
         WHEN sqlstate 'FULLR' THEN
-            RAISE NOTICE 'Test 26 Success: Employee 55 not able to join Meeting Room 2-1 from 12:00 to 13:00 because it is already at full capacity';
+            RAISE NOTICE 'Test 26.1 Success: Employee 55 not able to join Meeting Room 2-1 from 12:00 to 13:00 because it is already at full capacity';
 END
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE PROCEDURE tc26_2() AS $$
+DECLARE
+    is_present INTEGER;
+BEGIN
+    RAISE NOTICE 'Test 26.2 - full_capacity_on_join functionality';
+    CALL change_capacity(2, 1, CURRENT_DATE + 2, 8, 27); -- manager dept 2
+    CALL join_meeting(2, 1, CURRENT_DATE + 1, TIME '12:00', TIME '13:00', 55);
+    SELECT j.eid INTO is_present
+    FROM Joins j
+    WHERE j.floor_no = 2
+    AND j.room = 1
+    AND j.meeting_date = CURRENT_DATE + 1
+    AND j.start_time = TIME '12:00';
+
+    ASSERT (is_present IS NULL), 'Test 26.2 Failure: Employee 55 was able to join a meeting room that is full because trigger is incorrectly checking against capacity on CURRENT_DATE + 2 instead of CURRENT_DATE + 1';
+    EXCEPTION 
+        WHEN sqlstate 'FULLR' THEN
+            RAISE NOTICE 'Test 26.2 Success: Trigger is correctly checking against the capacity on CURRENT_DATE + 1 instead of CURRENT_DATE + 2 and preventing Employee 55 from joining Meeting Room 2-1 from 12:00 to 13:00';
+END
+$$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE PROCEDURE tc27() AS $$
 DECLARE num_present INTEGER;
