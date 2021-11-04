@@ -441,10 +441,15 @@ DECLARE
     current_capacity INTEGER;
 BEGIN
     SELECT u.new_capacity INTO max_capacity
-    FROM Updates u
-    WHERE NEW.floor_no = u.floor_no
-    AND NEW.room = u.room
-    AND u.update_date >= (SELECT u2.update_date FROM Updates u2 WHERE u2.floor_no = NEW.floor_no AND u2.room = NEW.room);
+    FROM Updates u NATURAL JOIN (
+        SELECT room, floor_no, MAX(update_date) as update_date
+        FROM Updates
+        WHERE update_date <= NEW.meeting_date
+        AND room = NEW.room
+        AND floor_no = NEW.floor_no
+        GROUP BY room, floor_no  
+    ) as latest_updates;
+    
 
     SELECT COUNT(*) INTO current_capacity
     FROM Joins j
@@ -516,6 +521,8 @@ EXECUTE FUNCTION no_future_hd();
 -- Meeting room dynamics
 CREATE OR REPLACE FUNCTION remove_overloaded_room_after_update() RETURNS TRIGGER AS $$
 BEGIN
+    ALTER TABLE Joins DISABLE TRIGGER protect_joins;
+    ALTER TABLE Meetings DISABLE TRIGGER protect_meetings;
     WITH overloaded_rooms AS (
         SELECT j.floor_no, j.room, j.meeting_date, j.start_time FROM Joins j
         WHERE j.floor_no = NEW.floor_no 
@@ -527,6 +534,8 @@ BEGIN
     DELETE FROM Meetings m
     WHERE (m.floor_no, m.room, m.meeting_date, m.start_time) 
     IN (SELECT * FROM overloaded_rooms);
+    ALTER TABLE Joins ENABLE TRIGGER protect_joins;
+    ALTER TABLE Meetings ENABLE TRIGGER protect_meetings;
     RETURN NEW;
 END
 $$ LANGUAGE plpgsql;
