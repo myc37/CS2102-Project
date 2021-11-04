@@ -630,3 +630,78 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER no_empty_updates 
 BEFORE DELETE ON Updates
 FOR EACH ROW EXECUTE FUNCTION no_empty_updates();
+
+
+-- block manual changes
+CREATE OR REPLACE FUNCTION block_manual_changes() RETURNS TRIGGER AS $$
+START
+    RAISE EXCEPTION USING
+        errcode="NOMCH",
+        message="Error: Please use the provided routines to make changes to the database"
+    RETURN NULL;
+END
+$$ LANGUAGE plpgsql
+
+CREATE TRIGGER protect_departments
+BEFORE INSERT OR UPDATE OR DELETE ON Departments
+FOR EACH ROW EXECUTE FUNCTION block_manual_changes();
+
+CREATE TRIGGER protect_employees
+BEFORE INSERT OR UPDATE OR DELETE ON Employees
+FOR EACH ROW EXECUTE FUNCTION block_manual_changes();
+
+CREATE TRIGGER protect_phone_numbers
+BEFORE INSERT OR UPDATE OR DELETE ON Phone_Numbers
+FOR EACH ROW EXECUTE FUNCTION block_manual_changes();
+
+CREATE TRIGGER protect_junior
+BEFORE INSERT OR UPDATE OR DELETE ON Junior
+FOR EACH ROW EXECUTE FUNCTION block_manual_changes();
+
+CREATE TRIGGER protect_booker
+BEFORE INSERT OR UPDATE OR DELETE ON Booker
+FOR EACH ROW EXECUTE FUNCTION block_manual_changes();
+
+CREATE TRIGGER protect_senior
+BEFORE INSERT OR UPDATE OR DELETE ON Senior
+FOR EACH ROW EXECUTE FUNCTION block_manual_changes();
+
+CREATE TRIGGER protect_manager
+BEFORE INSERT OR UPDATE OR DELETE ON Manager
+FOR EACH ROW EXECUTE FUNCTION block_manual_changes();
+
+CREATE TRIGGER protect_health_declaration
+BEFORE INSERT OR UPDATE OR DELETE ON Health_Declaration
+FOR EACH ROW EXECUTE FUNCTION block_manual_changes();
+
+CREATE TRIGGER protect_meeting_rooms
+BEFORE INSERT OR UPDATE OR DELETE ON Meeting_Rooms
+FOR EACH ROW EXECUTE FUNCTION block_manual_changes();
+
+CREATE TRIGGER protect_updates
+BEFORE INSERT OR UPDATE OR DELETE ON Updates
+FOR EACH ROW EXECUTE FUNCTION block_manual_changes();
+
+CREATE TRIGGER protect_meetings
+BEFORE INSERT OR UPDATE OR DELETE ON Meetings
+FOR EACH ROW EXECUTE FUNCTION block_manual_changes();
+
+CREATE TRIGGER protect_joins
+BEFORE INSERT OR UPDATE OR DELETE ON Joins
+FOR EACH ROW EXECUTE FUNCTION block_manual_changes();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

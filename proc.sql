@@ -28,7 +28,9 @@ CREATE OR REPLACE PROCEDURE add_department
         (IN dept_id INTEGER, IN dept_name TEXT)
     AS $$
     BEGIN
+        ALTER TABLE Departments DISABLE TRIGGER protect_departments;
         INSERT INTO Departments (did, dname) VALUES (dept_id, dept_name);
+        ALTER TABLE Departments ENABLE TRIGGER protect_departments;
     END
     $$ LANGUAGE plpgsql;
 
@@ -37,7 +39,9 @@ CREATE OR REPLACE PROCEDURE remove_department
         (IN dept_id INTEGER)
     AS $$
     BEGIN
+        ALTER TABLE Departments DISABLE TRIGGER protect_departments;
         DELETE FROM Departments WHERE did = dept_id; 
+        ALTER TABLE Departments ENABLE TRIGGER protect_departments;
     END
     $$ LANGUAGE plpgsql;
 
@@ -47,8 +51,12 @@ CREATE OR REPLACE PROCEDURE add_room
         (IN floor_no INTEGER, room_no INTEGER, room_name TEXT, room_capacity INTEGER, dept_id INTEGER, eid INTEGER)
     AS $$
     BEGIN
+        ALTER TABLE Meeting_Rooms DISABLE TRIGGER protect_meeting_rooms;
+        ALTER TABLE Updates DISABLE TRIGGER protect_updates;
         INSERT INTO Meeting_Rooms (room, floor_no, rname, did) VALUES (room_no, floor_no, room_name, dept_id);
         INSERT INTO Updates (floor_no, room, update_date, new_capacity, eid) VALUES (floor_no, room_no, CURRENT_DATE, room_capacity, eid);
+        ALTER TABLE Meeting_Rooms ENABLE TRIGGER protect_meeting_rooms;
+        ALTER TABLE Updates ENABLE TRIGGER protect_updates;
     END
     $$ LANGUAGE plpgsql;
 
@@ -57,15 +65,17 @@ CREATE OR REPLACE PROCEDURE change_capacity
         (IN floor_number INTEGER, room_number INTEGER, new_date DATE, capacity INTEGER, employee_id INTEGER)
     AS $$ 
     BEGIN
-    IF ((floor_number, room_number, new_date) NOT IN (Select floor_no, room, update_date from Updates)) THEN
-        INSERT INTO Updates (floor_no, room, update_date, new_capacity, eid) VALUES (floor_number, room_number, new_date, capacity, employee_id);
-    ELSE
-        UPDATE Updates 
-        SET new_capacity = capacity, eid = employee_id 
-        WHERE floor_no = floor_number 
-        AND room = room_number 
-        AND update_date = new_date;
-    END IF;
+        ALTER TABLE Updates DISABLE TRIGGER protect_updates;
+        IF ((floor_number, room_number, new_date) NOT IN (Select floor_no, room, update_date from Updates)) THEN
+            INSERT INTO Updates (floor_no, room, update_date, new_capacity, eid) VALUES (floor_number, room_number, new_date, capacity, employee_id);
+        ELSE
+            UPDATE Updates 
+            SET new_capacity = capacity, eid = employee_id 
+            WHERE floor_no = floor_number 
+            AND room = room_number 
+            AND update_date = new_date;
+        END IF;
+        ALTER TABLE Updates ENABLE TRIGGER protect_updates;
     END
     $$ LANGUAGE plpgsql;
 
@@ -73,7 +83,9 @@ CREATE OR REPLACE PROCEDURE change_capacity
 -- added this procedure
 CREATE OR REPLACE PROCEDURE add_phone_number (IN employee_id INTEGER, IN phone_number INTEGER, IN phone_type TEXT) AS $$
         BEGIN
+            ALTER TABLE Phone_Numbers DISABLE TRIGGER protect_phone_numbers;
             INSERT INTO Phone_Numbers (eid, phone_number, phone_type) VALUES (employee_id, phone_number, phone_type);
+            ALTER TABLE Phone_Numbers ENABLE TRIGGER protect_phone_numbers;
         END
         $$ LANGUAGE plpgsql;
 
@@ -88,16 +100,24 @@ CREATE OR REPLACE PROCEDURE add_employee
     BEGIN
         --ERROR need change generated email to be unique
         formatted_name := REPLACE(employee_name, ' ', '_');
+        ALTER TABLE Employees DISABLE TRIGGER protect_employees;  
         INSERT INTO Employees (did, ename) VALUES (department_id, employee_name) RETURNING eid INTO employee_id;
         UPDATE Employees SET email = CONCAT(formatted_name, '_', employee_id, '@bluewhale.org') WHERE eid = employee_id;
+        ALTER TABLE Employees ENABLE TRIGGER protect_employees;  
         IF kind = 'junior' THEN
+            ALTER TABLE Junior DISABLE TRIGGER protect_junior;
             INSERT INTO Junior VALUES (employee_id);
+            ALTER TABLE Junior ENABLE TRIGGER protect_junior;
         ELSIF kind = 'senior' THEN
             -- INSERT INTO Booker VALUES (employee_id);
+            ALTER TABLE Senior DISABLE TRIGGER protect_senior;
             INSERT INTO Senior VALUES (employee_id);
+            ALTER TABLE Senior ENABLE TRIGGER protect_senior;
         ELSIF kind = 'manager' THEN 
             -- INSERT INTO Booker VALUES (employee_id);
+            ALTER TABLE Manager DISABLE TRIGGER protect_manager;
             INSERT INTO Manager VALUES (employee_id);
+            ALTER TABLE Manager ENABLE TRIGGER protect_manager;
         END IF;
         CALL add_phone_number(employee_id, phone_number, phone_type);
     END
@@ -108,9 +128,13 @@ CREATE OR REPLACE PROCEDURE remove_employee
         (IN employee_id INTEGER, IN date_of_resignation DATE)
     AS $$ 
     BEGIN
+        ALTER TABLE Employees DISABLE TRIGGER protect_employees;  
         UPDATE Employees SET resigned_date = date_of_resignation WHERE eid = employee_id;
-
+        ALTER TABLE Employees ENABLE TRIGGER protect_employees;  
+        
         -- WE ARE DIRECTLY DELETING INSTEAD OF CALLING UNBOOKROOM BECAUSE ITS EASIER
+        ALTER TABLE Joins DISABLE TRIGGER protect_joins;
+        ALTER TABLE Meetings DISABLE TRIGGER protect_meetings;  
         DELETE 
         FROM Meetings m
         WHERE m.booker_eid = employee_id
@@ -120,19 +144,24 @@ CREATE OR REPLACE PROCEDURE remove_employee
         SET approver_eid = NULL
         WHERE m2.approver_eid = employee_id
         AND ((m2.meeting_date = CURRENT_DATE AND m2.start_time > CURRENT_TIME) OR (m2.meeting_date > CURRENT_DATE));
+        ALTER TABLE Joins ENABLE TRIGGER protect_joins;
+        ALTER TABLE Meetings ENABLE TRIGGER protect_meetings; 
 
         -- WE ARE DIRECTLY DELETING INSTEAD OF CALLING LEAVE MEETING BECAUSE ITS EASIER
+        ALTER TABLE Joins DISABLE TRIGGER protect_joins; 
         DELETE  
         FROM Joins j
         WHERE j.eid = employee_id
         AND ((j.meeting_date = CURRENT_DATE AND j.start_time > CURRENT_TIME) OR (j.meeting_date > CURRENT_DATE));
+        ALTER TABLE Joins ENABLE TRIGGER protect_joins; 
 
         -- Delete all future change_capacities initiated by the employee that is resigning
+        ALTER TABLE Updates DISABLE TRIGGER protect_updates; 
         DELETE
         FROM Updates u
         WHERE u.eid = employee_id
         AND u.update_date > CURRENT_DATE;
-
+        ALTER TABLE Updates ENABLE TRIGGER protect_updates; 
     END
     $$ LANGUAGE plpgsql;
 
@@ -174,7 +203,6 @@ CREATE OR REPLACE FUNCTION search_room  -- start/end hour means th
       SELECT p.floor_no, p.room, mr.did, p.new_capacity
       FROM partial_answer p INNER JOIN Meeting_Rooms mr ON 
       p.floor_no = mr.floor_no AND p.room = mr.room;
-      
     END
     $$ LANGUAGE plpgsql;
 
@@ -201,11 +229,13 @@ CREATE OR REPLACE FUNCTION search_room  -- start/end hour means th
                 errcode='SHAEH',
                 message='Error: Start hour is after end hour';
         ELSE 
-                starting_time := start_hour;
+            starting_time := start_hour;
+            ALTER TABLE Meetings DISABLE TRIGGER protect_meetings; 
             WHILE (start_hour < end_hour) LOOP
                 INSERT INTO Meetings (floor_no, room, meeting_date, start_time, booker_eid, approver_eid) VALUES (floor_number, room_number, meet_date, start_hour, employee_id, NULL);
                 start_hour := start_hour + interval '1 hour';
             END LOOP;
+            ALTER TABLE Meetings ENABLE TRIGGER protect_meetings;
             CALL join_meeting(floor_number, room_number, meet_date, starting_time, end_hour, employee_id);
         END IF;
     END
@@ -231,13 +261,8 @@ CREATE OR REPLACE PROCEDURE unbook_room
                 message:= 'Error: Only the booker of the meeting is allowed to unbook the room';
         END IF;
 
-        -- DELETE FROM Joins j
-        -- WHERE j.room = room_number
-        -- AND j.floor_no = floor_number
-        -- AND j.meeting_date = meeting_date
-        -- AND j.start_time >= start_hour
-        -- AND j.start_time < end_hour;
-
+        ALTER TABLE Joins DISABLE TRIGGER protect_joins;
+        ALTER TABLE Meetings DISABLE TRIGGER protect_meetings;
         DELETE FROM Meetings m
         WHERE m.floor_no = floor_number 
         AND m.room = room_number 
@@ -245,6 +270,8 @@ CREATE OR REPLACE PROCEDURE unbook_room
         AND m.start_time >= start_hour 
         AND m.start_time < end_hour 
         AND m.booker_eid = employee_id;
+        ALTER TABLE Joins ENABLE TRIGGER protect_joins;
+        ALTER TABLE Meetings ENABLE TRIGGER protect_meetings;
     END
     $$ LANGUAGE plpgsql;
 
@@ -268,11 +295,12 @@ CREATE OR REPLACE PROCEDURE join_meeting
             message='Error: Cannot join approved meeting';
     END IF;
     
-
+    ALTER TABLE Joins DISABLE TRIGGER protect_joins;
     WHILE (start_hour < end_hour) LOOP
         INSERT INTO Joins (room, floor_no, meeting_date, start_time, eid) VALUES (room_no, floor_number, meet_date, start_hour, employee_id);
         start_hour := start_hour + interval '1 hour';
     END LOOP;
+    ALTER TABLE Joins ENABLE TRIGGER protect_joins;
 END
 $$ LANGUAGE plpgsql;
 
@@ -287,6 +315,7 @@ CREATE OR REPLACE PROCEDURE leave_meeting (
     )
 AS $$
 BEGIN
+    ALTER TABLE Joins DISABLE TRIGGER protect_joins;
     DELETE FROM Joins j 
     WHERE j.floor_no = floor_number 
     AND j.room = room_number
@@ -294,6 +323,7 @@ BEGIN
     AND j.start_time >= start_hour
     AND j.start_time < end_hour
     AND j.eid = employee_id;
+    ALTER TABLE Joins ENABLE TRIGGER protect_joins;
 END
 $$ LANGUAGE plpgsql;
 
@@ -307,12 +337,14 @@ CREATE OR REPLACE PROCEDURE approve_meeting (
     IN employee_id INTEGER
 ) AS $$
 BEGIN
+    ALTER TABLE Meetings DISABLE TRIGGER protect_meetings;
     UPDATE Meetings m SET approver_eid = employee_id
     WHERE m.floor_no = floor_number
     AND m.room = room_number
     AND m.meeting_date = meet_date
     AND m.start_time >= start_hour 
     AND m.start_time < end_hour;
+    ALTER TABLE Meetings ENABLE TRIGGER protect_meetings;
 END
 $$ LANGUAGE plpgsql;
 
@@ -342,13 +374,16 @@ BEGIN
             message='Error: Manager can only approve or reject meetings in the same department';
     END IF;
             
-
+    ALTER TABLE Joins DISABLE TRIGGER protect_joins;
+    ALTER TABLE Meetings DISABLE TRIGGER protect_meetings;
     DELETE FROM Meetings m
     WHERE m.floor_no = floor_number
     AND m.room = room_number
     AND m.meeting_date = meet_date
     AND m.start_time >= start_hour
     AND m.start_time < end_hour;
+    ALTER TABLE Joins ENABLE TRIGGER protect_joins;
+    ALTER TABLE Meetings ENABLE TRIGGER protect_meetings;
 END
 $$ LANGUAGE plpgsql;
 -- Health
@@ -360,7 +395,9 @@ CREATE OR REPLACE PROCEDURE declare_health
 AS $$
 BEGIN
     --- Constraint 31:
+    ALTER TABLE Health_Declaration DISABLE TRIGGER protect_health_declaration;
     INSERT INTO Health_Declaration (eid, hd_date, temp) VALUES (employee_id, declaration_date, temp);
+    ALTER TABLE Health_Declaration ENABLE TRIGGER protect_health_declaration;
 END
 $$ LANGUAGE plpgsql;
 
@@ -415,6 +452,8 @@ BEGIN
             AND employee_id <> j2.eid
         ) 
         -- 3.1. Remove these employees who were close contacted from meetings for next 7 days
+        ALTER TABLE Joins DISABLE TRIGGER protect_joins;
+        ALTER TABLE Meetings DISABLE TRIGGER protect_meetings;
         DELETE FROM Joins WHERE eid IN (SELECT * FROM close_contact_employees)
         AND ((meeting_date = CURRENT_DATE AND start_time > CURRENT_TIME) OR (meeting_date > CURRENT_DATE))
         AND meeting_date <= CURRENT_DATE + interval '7 days';
@@ -444,6 +483,8 @@ BEGIN
 
         -- 1. Cancel all future bookings that this employee has made
         DELETE FROM Meetings WHERE booker_eid = employee_id AND ((meeting_date = CURRENT_DATE AND start_time > CURRENT_TIME) OR (meeting_date > CURRENT_DATE));  
+        ALTER TABLE Meetings ENABLE TRIGGER protect_meetings;
+        ALTER TABLE Joins ENABLE TRIGGER protect_joins;
     ELSE 
 		RAISE NOTICE 'Employee does not have a fever';
     END IF;
