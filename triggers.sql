@@ -14,8 +14,6 @@ AFTER INSERT ON Manager
 FOR EACH ROW EXECUTE FUNCTION auto_add_booker();
 
 --- Constraint 12: Enforces the ISA No Overlap Constraint between Junior and Booker
--- Works
-CREATE OR REPLACE FUNCTION junior_not_booker() RETURNS TRIGGER AS $$
 DECLARE
 	count INTEGER;
 BEGIN 
@@ -36,9 +34,7 @@ BEFORE INSERT OR UPDATE ON Junior
 FOR EACH ROW EXECUTE FUNCTION junior_not_booker();
 
 --- Constraint 12: Enforces the ISA No Overlap Constraint between Junior and Booker
--- Works
 CREATE OR REPLACE FUNCTION booker_not_junior() RETURNS TRIGGER AS $$
-DECLARE
 	count INTEGER;
 BEGIN
 	SELECT COUNT(eid) INTO count FROM Junior WHERE eid = NEW.eid;
@@ -59,10 +55,8 @@ BEFORE INSERT ON Booker
 FOR EACH ROW EXECUTE FUNCTION booker_not_junior();
 
 --- Constraint 12: Enforces that an employee cannot be both a manager and a senior
--- Works
 CREATE OR REPLACE FUNCTION senior_not_manager() RETURNS TRIGGER AS $$
 DECLARE
-	count INTEGER;
 BEGIN
 	SELECT COUNT(eid) INTO count FROM Manager WHERE eid = NEW.eid;
 	IF (COUNT > 0) THEN
@@ -82,11 +76,8 @@ BEFORE INSERT ON Senior
 FOR EACH ROW EXECUTE FUNCTION senior_not_manager();
 
 --- Constraint 12: Enforces that an employee cannot be both a manager and a senior
--- Works
 CREATE OR REPLACE FUNCTION manager_not_senior() RETURNS TRIGGER AS $$
 DECLARE
-	count INTEGER;
-BEGIN
 	SELECT COUNT(eid) INTO count FROM Senior WHERE eid = NEW.eid;
 	IF (COUNT > 0) THEN
         RAISE EXCEPTION USING 
@@ -105,12 +96,9 @@ BEFORE INSERT ON Manager
 FOR EACH ROW EXECUTE FUNCTION manager_not_senior();
 
 --- Constraint 16 && Constraint 34:
---SYNTAX WORKS 
 CREATE OR REPLACE FUNCTION booker_nofever_noresign() RETURNS TRIGGER AS $$
 DECLARE
     fever BOOLEAN;
-    resigned BOOLEAN;
-BEGIN
     SELECT (hd.temp > 37.5) INTO fever
     FROM Health_Declaration hd
     WHERE hd.eid = NEW.booker_eid
@@ -145,13 +133,10 @@ INSERT ON Meetings
 FOR EACH ROW EXECUTE FUNCTION booker_nofever_noresign();
 
 --- Constraint 34:
--- SYNTAX WORKS
 CREATE OR REPLACE FUNCTION approver_noresign() RETURNS TRIGGER AS $$
 DECLARE
     resigned BOOLEAN;
 BEGIN
-    SELECT e.resigned_date IS NOT NULL INTO resigned
-    FROM Employees e
     WHERE e.eid = NEW.approver_eid;
 
     IF resigned IS TRUE THEN
@@ -197,14 +182,11 @@ BEFORE INSERT ON Joins
 FOR EACH ROW EXECUTE FUNCTION reject_fever_join();
 
 --- CONSTRAINT 21
---Syntax works
 CREATE OR REPLACE FUNCTION reject_approval_diff_dept() RETURNS TRIGGER AS $$
 DECLARE
     manager_did INTEGER;
     meeting_did INTEGER;
 BEGIN
-    SELECT e.did into manager_did
-    FROM Employees e
     WHERE e.eid = NEW.approver_eid;
 
     SELECT m.did INTO meeting_did
@@ -236,16 +218,12 @@ UPDATE ON Meetings
 FOR EACH ROW EXECUTE FUNCTION reject_approval_diff_dept();
 
 --- CONSTRAINT 22
--- Syntax Works
 CREATE OR REPLACE FUNCTION stop_second_approval() RETURNS TRIGGER AS $$
 BEGIN
     RAISE EXCEPTION USING
         errcode='2APPR',
         message='Error: Cannot approve a meeting that is already approved.';
     RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
 
 CREATE TRIGGER approve_once_only
 BEFORE
@@ -253,8 +231,6 @@ UPDATE ON Meetings
 FOR EACH ROW WHEN (OLD.approver_eid IS NOT NULL) EXECUTE FUNCTION stop_second_approval();
 
 --- Constraint 23
--- ensure that approver id changes approver id for all time blocks
--- Syntax works
 CREATE OR REPLACE FUNCTION no_participants_after_approved() RETURNS TRIGGER AS $$
 BEGIN
     IF ((SELECT approver_eid FROM Meetings m WHERE NEW.room = m.room AND NEW.floor_no = m.floor_no AND NEW.meeting_date = m.meeting_date AND NEW.start_time = m.start_time) IS NOT NULL) THEN
@@ -262,10 +238,8 @@ BEGIN
             errcode='JAFTA',
             message='Error: Meeting has already been approved, no new participants can be added.';
         RETURN NULL;
-    ELSE
         RETURN NEW;
 	END IF;
-END
 $$ LANGUAGE plpgsql;
 
 
@@ -274,7 +248,6 @@ BEFORE INSERT ON Joins
 FOR EACH ROW EXECUTE FUNCTION no_participants_after_approved();
 
 -- cannot leave if approved
---Syntax works
 CREATE OR REPLACE FUNCTION check_leave_meeting() RETURNS TRIGGER AS $$
 DECLARE
 	resigned DATE;
@@ -283,10 +256,8 @@ DECLARE
     is_in_past BOOLEAN;
 BEGIN
 	SELECT e.resigned_date INTO resigned FROM Employees e WHERE e.eid = OLD.eid;
-
 	SELECT (hd.temp > 37.5) INTO has_fever FROM Health_Declaration hd WHERE hd.hd_date = OLD.meeting_date AND eid = OLD.eid;
 
-    SELECT m.approver_eid INTO approver_id FROM Meetings m WHERE m.room = OLD.room 
     AND m.floor_no = OLD.floor_no 
     AND m.meeting_date = OLD.meeting_date 
     AND m.start_time = OLD.start_time;
@@ -318,9 +289,6 @@ BEFORE DELETE ON Joins
 FOR EACH ROW EXECUTE FUNCTION check_leave_meeting();
 
 --- Constraint 24
--- Only manager from same department as meeting room may change meeting room capacity
--- How does the trigger get the manager_id?
--- Syntax works
 CREATE OR REPLACE FUNCTION same_manager_change_capacity() RETURNS TRIGGER AS $$
 DECLARE 
 	room_department_id INTEGER;
@@ -329,8 +297,6 @@ BEGIN
     SELECT mr.did FROM Meeting_Rooms mr WHERE NEW.room = mr.room AND NEW.floor_no = mr.floor_no INTO room_department_id;
     SELECT e.did FROM Employees e WHERE NEW.eid = e.eid INTO manager_department_id;
     IF (room_department_id <> manager_department_id) THEN
-RAISE EXCEPTION USING
-            errcode='SMGRC',
             message='Error: Only manager from the department can change meeting room capacity';
         RETURN NULL;
     ELSE
@@ -343,30 +309,7 @@ CREATE TRIGGER same_manager_change_capacity
 BEFORE INSERT OR UPDATE ON Updates
 FOR EACH ROW EXECUTE FUNCTION same_manager_change_capacity();
 
---Constraint 24
-
--- CREATE OR REPLACE FUNCTION only_manager_change_capacity() RETURNS TRIGGER AS $$
--- BEGIN
---     IF (NEW.eid NOT IN (SELECT eid FROM Manager)) THEN
---         RAISE EXCEPTION USING
---             errcode='OMGRC',
---             message='Error: Non-Managers cannot change room capacity';
---         RETURN NULL;
---     ELSE
---         RETURN NEW;
---     END IF;
--- END
--- $$ LANGUAGE plpgsql;
-
--- CREATE TRIGGER only_manager_change_capacity
--- BEFORE INSERT OR UPDATE ON Updates
--- FOR EACH ROW EXECUTE FUNCTION only_manager_change_capacity();
-
-
-
---- Constraint 25
--- Booking can only be made for future meetings
--- Syntax works
+--- Constraint 25 Booking can only be made for future meetings
 CREATE OR REPLACE FUNCTION booking_only_future() RETURNS TRIGGER AS $$
 BEGIN
     IF ((NEW.meeting_date < CURRENT_DATE) OR (NEW.meeting_date = CURRENT_DATE AND NEW.start_time < CURRENT_TIME)) THEN
@@ -387,7 +330,6 @@ INSERT ON Meetings
 FOR EACH ROW EXECUTE FUNCTION booking_only_future();
 
 --- Constraint 26:
---Syntax works
 CREATE OR REPLACE FUNCTION check_join_meeting_date() RETURNS TRIGGER AS $$
 BEGIN
     IF ((NEW.meeting_date < CURRENT_DATE) OR (NEW.meeting_date = CURRENT_DATE AND NEW.start_time < CURRENT_TIME)) THEN
@@ -407,7 +349,6 @@ INSERT ON Joins
 FOR EACH ROW EXECUTE FUNCTION check_join_meeting_date();
 
 --- Constraint: Only can join meeting if capacity is not full
---Syntax works
 CREATE OR REPLACE FUNCTION full_capacity_on_join() RETURNS TRIGGER AS $$
 DECLARE
     max_capacity INTEGER;
@@ -448,7 +389,6 @@ INSERT ON Joins
 FOR EACH ROW EXECUTE FUNCTION full_capacity_on_join();
 
 --- Constrain 27:
---Syntax works
 CREATE OR REPLACE FUNCTION check_approve_meeting_date() RETURNS TRIGGER AS $$
 BEGIN
     RAISE EXCEPTION USING
@@ -476,7 +416,6 @@ AFTER INSERT ON Health_Declaration
 FOR EACH ROW WHEN (NEW.temp > 37.5) EXECUTE FUNCTION contact_trace_on_fever();
 
 -- can declare health for today only: not for old dates or future dates
-
 CREATE OR REPLACE FUNCTION no_future_hd() RETURNS trigger AS $$
 BEGIN
     RAISE EXCEPTION USING
@@ -513,12 +452,9 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 
-
 CREATE TRIGGER remove_overloaded_room_after_update
 AFTER INSERT OR UPDATE ON Updates -- NEW (room, floor, meet_date, update_date, new_capacity)
 FOR EACH ROW EXECUTE FUNCTION remove_overloaded_room_after_update();
-
-
 
 CREATE OR REPLACE FUNCTION valid_meeting() RETURNS TRIGGER AS $$
 DECLARE 
@@ -546,7 +482,6 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER valid_meeting
 BEFORE INSERT ON Meetings
 FOR EACH ROW EXECUTE FUNCTION valid_meeting();
-
 
 CREATE OR REPLACE FUNCTION no_declare_cannot_join() RETURNS TRIGGER AS $$
 DECLARE
@@ -638,7 +573,6 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER booker_cannot_leave
 BEFORE DELETE ON Joins
 FOR EACH ROW EXECUTE FUNCTION booker_cannot_leave();
-
 
 -- block manual changes
 CREATE OR REPLACE FUNCTION block_manual_changes() RETURNS TRIGGER AS $$
