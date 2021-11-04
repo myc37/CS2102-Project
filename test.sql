@@ -8,16 +8,40 @@ BEGIN
     CALL basic_func();
     CALL core_func();
     CALL health_func();
-    CALL admin_func();
+    -- CALL admin_func();
 END
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE PROCEDURE reset_db() AS $$
 BEGIN
     ALTER TABLE Joins DISABLE TRIGGER valid_leave_meeting; 
+    ALTER TABLE Departments DISABLE TRIGGER protect_departments;
+    ALTER TABLE Employees DISABLE TRIGGER protect_employees;
+    ALTER TABLE Phone_Numbers DISABLE TRIGGER protect_phone_numbers;
+    ALTER TABLE Junior DISABLE TRIGGER protect_junior;
+    ALTER TABLE Booker DISABLE TRIGGER protect_booker;
+    ALTER TABLE Senior DISABLE TRIGGER protect_senior;
+    ALTER TABLE Manager DISABLE TRIGGER protect_manager;
+    ALTER TABLE Health_Declaration DISABLE TRIGGER protect_health_declaration;
+    ALTER TABLE Meeting_Rooms DISABLE TRIGGER protect_meeting_rooms;
+    ALTER TABLE Updates DISABLE TRIGGER protect_updates;
+    ALTER TABLE Meetings DISABLE TRIGGER protect_meetings;
+    ALTER TABLE Joins DISABLE TRIGGER protect_joins;
     CALL delete_all();
     CALL clear_serial();
     ALTER TABLE Joins ENABLE TRIGGER valid_leave_meeting;
+    ALTER TABLE Departments ENABLE TRIGGER protect_departments;
+    ALTER TABLE Employees ENABLE TRIGGER protect_employees;
+    ALTER TABLE Phone_Numbers ENABLE TRIGGER protect_phone_numbers;
+    ALTER TABLE Junior ENABLE TRIGGER protect_junior;
+    ALTER TABLE Booker ENABLE TRIGGER protect_booker;
+    ALTER TABLE Senior ENABLE TRIGGER protect_senior;
+    ALTER TABLE Manager ENABLE TRIGGER protect_manager;
+    ALTER TABLE Health_Declaration ENABLE TRIGGER protect_health_declaration;
+    ALTER TABLE Meeting_Rooms ENABLE TRIGGER protect_meeting_rooms;
+    ALTER TABLE Updates ENABLE TRIGGER protect_updates;
+    ALTER TABLE Meetings ENABLE TRIGGER protect_meetings;
+    ALTER TABLE Joins ENABLE TRIGGER protect_joins;
 END
 $$ LANGUAGE plpgsql;
 
@@ -191,22 +215,26 @@ END $$ LANGUAGE plpgsql;
 CREATE OR REPLACE PROCEDURE tc5() AS $$
 BEGIN
     RAISE NOTICE 'Test 5 - Constraint 1 Unique Employee ID:';
+    ALTER TABLE Employees DISABLE TRIGGER protect_employees;
     INSERT INTO Employees (eid, did, email, ename, resigned_date) VALUES (1, 1, 'Adel_Stannislawski_1@bluewhale.org', 'Adel Stannislawski', NULL);
     RAISE NOTICE 'Test 5 Failure';
     EXCEPTION 
         WHEN sqlstate '23505' THEN
         RAISE NOTICE 'Test 5 Success: Constraint 1 Unique Employee ID Enforced'; 
+        ALTER TABLE Employees ENABLE TRIGGER protect_employees;
 END
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE PROCEDURE tc6() AS $$
 BEGIN
     RAISE NOTICE 'Test 6 - Constraint 2 Unique Email Address:';
+    ALTER TABLE Employees DISABLE TRIGGER protect_employees;
     UPDATE Employees SET email = 'Adel_Stannislawski_1@bluewhale.org' WHERE eid = 2; 
     RAISE NOTICE 'Test 6 Failure';
     EXCEPTION 
         WHEN sqlstate '23505' THEN
         RAISE NOTICE 'Test 6 Success: Constraint 2 Unique Email Enforced'; 
+        ALTER TABLE Employees ENABLE TRIGGER protect_employees;
 END
 $$ LANGUAGE plpgsql;
 
@@ -226,12 +254,13 @@ DECLARE senior_count INTEGER;
 BEGIN
     SELECT COUNT(*) INTO senior_count FROM Senior;
     RAISE NOTICE 'Test 7.1 - Constraint 12 Employee must be one of each kind - Adding a Junior into Senior:';
+    ALTER TABLE Senior DISABLE TRIGGER protect_senior;
     INSERT INTO Senior (eid) VALUES (1); -- Employee is a junior
     ASSERT ((SELECT COUNT (*) FROM Senior) = senior_count), 'Test 7.1 Failure';
     EXCEPTION 
         WHEN sqlstate 'BJISA' THEN
         RAISE NOTICE 'Test 7.1 Success'; 
-
+        ALTER TABLE Senior ENABLE TRIGGER protect_senior;
 END
 $$ LANGUAGE plpgsql;
 
@@ -240,11 +269,13 @@ DECLARE manager_count INTEGER;
 BEGIN
     SELECT COUNT(*) INTO manager_count FROM Manager;
     RAISE NOTICE 'Test 7.2 - Constraint 12 Employee must be one of each kind - Adding a Junior into Manager';
+    ALTER TABLE Manager DISABLE TRIGGER protect_manager;
     INSERT INTO Manager (eid) VALUES (1); -- Employee is a junior
     ASSERT ((SELECT COUNT(*) FROM Manager) = manager_count), 'Test 7.2 Failure';
     EXCEPTION 
         WHEN sqlstate 'BJISA' THEN
         RAISE NOTICE 'Test 7.2 Success'; 
+        ALTER TABLE Manager ENABLE TRIGGER protect_manager;
 
 END
 $$ LANGUAGE plpgsql;
@@ -254,12 +285,14 @@ DECLARE junior_count INTEGER;
 BEGIN
     SELECT COUNT(*) INTO junior_count FROM Junior;
     RAISE NOTICE 'Test 7.3 - Constraint 12 Employee must be one of each kind - Adding a Senior into Junior:';
+    ALTER TABLE Junior DISABLE TRIGGER protect_junior;
     INSERT INTO Junior (eid) VALUES (77); -- Employee is a Senior
     RAISE NOTICE 'Test 7.3 Failure';
     ASSERT ((SELECT COUNT(*) FROM Junior) = junior_count),'Test 7.3 Failure';
     EXCEPTION 
         WHEN sqlstate 'JBISA' THEN
         RAISE NOTICE 'Test 7.3 Success'; 
+        ALTER TABLE Junior ENABLE TRIGGER protect_junior;
 END
 $$ LANGUAGE plpgsql;
 
@@ -268,11 +301,13 @@ DECLARE manager_count INTEGER;
 BEGIN
     SELECT COUNT(*) INTO manager_count FROM Manager;
     RAISE NOTICE 'Test 7.4 - Constraint 12 Employee must be one of each kind - Already a Senior into Manager';
+    ALTER TABLE Manager DISABLE TRIGGER protect_manager;
     INSERT INTO Manager (eid) VALUES (77); -- Employee is a Senior
     ASSERT ((SELECT COUNT(*) FROM Manager) = manager_count), 'Test 7.4 Failure';
     EXCEPTION 
         WHEN sqlstate 'MSISA' THEN
         RAISE NOTICE 'Test 7.4 Success'; 
+        ALTER TABLE Manager ENABLE TRIGGER protect_manager;
 END
 $$ LANGUAGE plpgsql;
 
@@ -281,11 +316,13 @@ DECLARE junior_count INTEGER;
 BEGIN
     SELECT COUNT(*) INTO junior_count FROM Junior;
     RAISE NOTICE 'Test 7.5 - Constraint 12 Employee must be one of each kind - Adding a Manager into Junior:';
+    ALTER TABLE Junior DISABLE TRIGGER protect_junior;
     INSERT INTO Junior (eid) VALUES (82); -- Employee is a Manager
     ASSERT ((SELECT COUNT(*) FROM Junior) = junior_count),'Test 7.5 Failure';
     EXCEPTION 
         WHEN sqlstate 'JBISA' THEN
         RAISE NOTICE 'Test 7.5 Success'; 
+        ALTER TABLE Junior ENABLE TRIGGER protect_junior;
 END
 $$ LANGUAGE plpgsql;
 
@@ -294,11 +331,13 @@ DECLARE senior_count INTEGER;
 BEGIN
     SELECT COUNT(*) INTO senior_count FROM Senior;
     RAISE NOTICE 'Test 7.6 - Constraint 12 Employee must be one of each kind - Already a Manager into Senior';
+    ALTER TABLE Senior DISABLE TRIGGER protect_senior;
     INSERT INTO Senior (eid) VALUES (82); -- Employee is a Manager
     ASSERT ((SELECT COUNT(*) FROM Senior) = senior_count), 'Test 7.6 Failure';
     EXCEPTION 
         WHEN sqlstate 'SMISA' THEN
         RAISE NOTICE 'Test 7.6 Success'; 
+        ALTER TABLE Senior ENABLE TRIGGER protect_senior;
 END
 $$ LANGUAGE plpgsql;
 
@@ -334,11 +373,13 @@ DECLARE phone_rows INTEGER;
 BEGIN
     SELECT COUNT(*) FROM Phone_Numbers INTO phone_rows;
     RAISE NOTICE 'Test 10 - Primary Constraint (eid, phone_type) in Phone_Numbers';
+    ALTER TABLE Phone_Numbers DISABLE TRIGGER protect_phone_numbers;
     INSERT INTO Phone_Numbers VALUES (1, 917824, 'Office');
     ASSERT ((SELECT COUNT(*) FROM Phone_Numbers) = phone_rows), 'Test 10 Failure';
     EXCEPTION
         WHEN sqlstate '23505' THEN 
         RAISE NOTICE 'Test 10 Success: Primary Key Constraint of Phone_Numbers'; 
+        ALTER TABLE Phone_Numbers ENABLE TRIGGER protect_phone_numbers;
 END
 $$ LANGUAGE plpgsql;
 
@@ -347,11 +388,13 @@ DECLARE phone_rows INTEGER;
 BEGIN
     SELECT COUNT(*) FROM Phone_Numbers INTO phone_rows;
     RAISE NOTICE 'Test 11 - Foreign Key Constraint Phone_Numbers (eid)';
+    ALTER TABLE Phone_Numbers DISABLE TRIGGER protect_phone_numbers;
     INSERT INTO Phone_Numbers VALUES (5000, 917824, 'Office');
     ASSERT ((SELECT COUNT(*) FROM Phone_Numbers) = phone_rows), 'Test 11 Failure';
     EXCEPTION
         WHEN sqlstate '23503' THEN 
         RAISE NOTICE 'Test 11 Success: Foreign Key Constraint (eid) of Phone_Numbers'; 
+        ALTER TABLE Phone_Numbers ENABLE TRIGGER protect_phone_numbers;
 END
 $$ LANGUAGE plpgsql;
 
@@ -1507,7 +1550,7 @@ CREATE OR REPLACE PROCEDURE tc48_8() AS $$
 DECLARE 
     e30_meetings_after_seven_days INTEGER;
 BEGIN
- 
+
     RAISE NOTICE 'Test 48.8 - Employee 30 should not have their future bookings after 7 days deleted';
 
     SELECT COUNT(*) INTO e30_meetings_after_seven_days 

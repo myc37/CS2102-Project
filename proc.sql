@@ -110,13 +110,17 @@ CREATE OR REPLACE PROCEDURE add_employee
             ALTER TABLE Junior ENABLE TRIGGER protect_junior;
         ELSIF kind = 'senior' THEN
             -- INSERT INTO Booker VALUES (employee_id);
+            ALTER TABLE Booker DISABLE TRIGGER protect_booker;
             ALTER TABLE Senior DISABLE TRIGGER protect_senior;
             INSERT INTO Senior VALUES (employee_id);
+            ALTER TABLE Booker ENABLE TRIGGER protect_booker;
             ALTER TABLE Senior ENABLE TRIGGER protect_senior;
         ELSIF kind = 'manager' THEN 
             -- INSERT INTO Booker VALUES (employee_id);
+            ALTER TABLE Booker DISABLE TRIGGER protect_booker;
             ALTER TABLE Manager DISABLE TRIGGER protect_manager;
             INSERT INTO Manager VALUES (employee_id);
+            ALTER TABLE Booker ENABLE TRIGGER protect_booker;
             ALTER TABLE Manager ENABLE TRIGGER protect_manager;
         END IF;
         CALL add_phone_number(employee_id, phone_number, phone_type);
