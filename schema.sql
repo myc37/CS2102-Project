@@ -35,7 +35,7 @@ CREATE TABLE Phone_Numbers (
 	phone_type TEXT,
 	PRIMARY KEY(eid, phone_type),
 	CONSTRAINT valid_phone_type CHECK (phone_type IN ('Home', 'Office', 'Mobile')),
-	FOREIGN KEY (eid) REFERENCES Employees (eid)
+	FOREIGN KEY (eid) REFERENCES Employees (eid) ON DELETE CASCADE
 );
 
 CREATE TABLE Junior (
